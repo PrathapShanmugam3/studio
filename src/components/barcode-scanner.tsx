@@ -25,108 +25,123 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { toast } = useToast();
+  const scannerRef = useRef<any | null>(null); // To hold BarcodeDetector instance
+  const animationFrameRef = useRef<number | null>(null);
   const scannedBarcodes = useRef(new Set<string>());
+  const { toast } = useToast();
 
-  const handleScan = useCallback(async (barcodeValue: string) => {
-    if (scannedBarcodes.current.has(barcodeValue) || status === 'loading' || status === 'success') {
-      return;
-    }
-
-    scannedBarcodes.current.add(barcodeValue);
-    setStatus('loading');
-    setErrorMessage(null);
-    try {
-      const result = await barcodeProductLookup({ barcode: barcodeValue });
-      
-      // The AI can sometimes hallucinate even with a strict prompt.
-      // A simple check for a valid name can prevent adding empty items.
-      if (result.productName && result.productName.toLowerCase() !== 'not found' && result.productName.trim() !== '') {
-        result.imageUrl = `https://picsum.photos/seed/${result.productId || 'ai-product'}/400/400`;
-        onScan(result);
-        setStatus('success');
-      } else {
-        throw new Error('Product not found for this barcode.');
-      }
-      
-      setTimeout(() => {
-        scannedBarcodes.current.delete(barcodeValue);
+  const handleProductFound = (product: BarcodeProductLookupOutput) => {
+    setStatus('success');
+    onScan(product);
+    setTimeout(() => {
+        // After showing success for a bit, go back to scanning
+        // but keep the barcode in the scanned set for a longer duration
+        // to prevent immediate re-scans of the same item.
         setStatus('scanning');
-      }, 1500);
-
-    } catch (e: any) {
-      console.error(e);
-      setErrorMessage(e.message || 'Failed to look up product. Please try again.');
+    }, 1500);
+    setTimeout(() => {
+        if(product.productId){
+            scannedBarcodes.current.delete(product.productId);
+        }
+    }, 5000);
+  };
+  
+  const handleProductError = (barcode: string, errorMsg: string) => {
+      setErrorMessage(errorMsg);
       setStatus('error');
-      
+      console.error(errorMsg);
       setTimeout(() => {
-        scannedBarcodes.current.delete(barcodeValue);
-        setStatus('scanning');
-        setErrorMessage(null);
+          setStatus('scanning');
+          setErrorMessage(null);
+          scannedBarcodes.current.delete(barcode);
       }, 2500);
-    }
-  }, [onScan, status]);
+  };
 
-
-  useEffect(() => {
-    let stream: MediaStream | null = null;
-    let detectionInterval: NodeJS.Timeout | null = null;
-    // @ts-ignore
-    let barcodeDetector: BarcodeDetector | null = null;
-    
-    const startScan = async () => {
-      if (!('BarcodeDetector' in window)) {
-        setErrorMessage('Barcode scanning is not supported on this browser or device.');
-        setHasCameraPermission(false);
-        setStatus('error');
-        return;
-      }
-
-      if (!videoRef.current || !stream || stream.active === false) return;
+  const lookupBarcode = useCallback(async (barcode: string) => {
+      if (scannedBarcodes.current.has(barcode) || status !== 'scanning') return;
       
-      try {
-        // @ts-ignore - BarcodeDetector is not in all TS lib versions yet
-        barcodeDetector = new window.BarcodeDetector({
-          formats: [ 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code' ],
-        });
+      setStatus('loading');
+      scannedBarcodes.current.add(barcode);
 
-        detectionInterval = setInterval(async () => {
-          if (videoRef.current && videoRef.current.readyState >= 2 && status === 'scanning') {
-            try {
-                // @ts-ignore
-                const barcodes = await barcodeDetector.detect(videoRef.current);
-                if (barcodes.length > 0 && barcodes[0].rawValue) {
-                  handleScan(barcodes[0].rawValue);
-                }
-            } catch (detectError) {
-                console.error("Barcode detection failed:", detectError);
-                // Don't set a persistent error, might be a temporary issue.
-            }
+      try {
+          const result = await barcodeProductLookup({ barcode: barcode });
+          if (result && result.productName && result.productName.toLowerCase() !== 'not found' && result.productName.trim() !== '') {
+              // Use a more stable seed for placeholder images
+              result.imageUrl = `https://picsum.photos/seed/${result.productId || barcode}/400/400`;
+              handleProductFound(result);
+          } else {
+              handleProductError(barcode, 'Product not found for this barcode.');
           }
-        }, 500); // Check for barcode every 500ms
-      } catch (e) {
-          console.error('BarcodeDetector initialization failed:', e);
-          setErrorMessage('An error occurred while preparing the barcode scanner.');
-          setStatus('error');
+      } catch (e: any) {
+          handleProductError(barcode, e.message || 'Failed to look up product.');
       }
-    };
+  }, [status, onScan]);
 
-    const getCameraPermission = async () => {
+
+  const detectBarcode = useCallback(async () => {
+    if (videoRef.current && scannerRef.current && videoRef.current.readyState >= 2) {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        setHasCameraPermission(true);
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          // Wait for the video to be ready to play
-          videoRef.current.onloadedmetadata = () => {
-            videoRef.current?.play().catch(e => console.error("Video play failed:", e));
-            startScan();
+        const barcodes = await scannerRef.current.detect(videoRef.current);
+        if (barcodes.length > 0) {
+          for (const barcode of barcodes) {
+            if (barcode.rawValue) {
+                lookupBarcode(barcode.rawValue);
+                // Once we start a lookup, pause detection briefly
+                return;
+            }
           }
         }
       } catch (error) {
-        console.error('Error accessing camera:', error);
+        console.error('Barcode detection error:', error);
+      }
+    }
+    // Continue scanning if no barcode was found or lookup is not in progress
+    if (status === 'scanning') {
+      animationFrameRef.current = requestAnimationFrame(detectBarcode);
+    }
+  }, [lookupBarcode, status]);
+
+  useEffect(() => {
+    const initializeScanner = async () => {
+      // @ts-ignore
+      if (!('BarcodeDetector' in window) || !window.BarcodeDetector) {
+        setStatus('error');
+        setErrorMessage('Barcode Detector API is not supported by this browser.');
         setHasCameraPermission(false);
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        setHasCameraPermission(true);
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.playsInline = true;
+          videoRef.current.play().catch(console.error);
+        }
+        
+        // @ts-ignore
+        scannerRef.current = new window.BarcodeDetector({
+            formats: [ 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code' ],
+        });
+
+        // Start detection loop only when video is playing
+        const videoElement = videoRef.current;
+        if (videoElement) {
+            const handleVideoPlaying = () => {
+                animationFrameRef.current = requestAnimationFrame(detectBarcode);
+            };
+            videoElement.addEventListener('playing', handleVideoPlaying);
+            return () => {
+                videoElement.removeEventListener('playing', handleVideoPlaying);
+            };
+        }
+
+      } catch (error) {
+        console.error('Camera access error:', error);
+        setHasCameraPermission(false);
+        setStatus('error');
+        setErrorMessage('Camera access was denied. Please grant permission in your browser settings.');
         toast({
           variant: 'destructive',
           title: 'Camera Access Denied',
@@ -136,16 +151,17 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       }
     };
 
-    getCameraPermission();
+    initializeScanner();
 
     return () => {
-      if (detectionInterval) clearInterval(detectionInterval);
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (videoRef.current && videoRef.current.srcObject) {
+        (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handleScan]);
+  }, [detectBarcode, onClose, toast]);
 
   const StatusOverlay = () => {
     switch (status) {
@@ -194,16 +210,16 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         </DialogHeader>
         
         <div className="my-4 flex aspect-video w-full items-center justify-center rounded-lg bg-secondary overflow-hidden relative">
-            <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
+            <video ref={videoRef} className="w-full h-full object-cover" />
             <StatusOverlay />
         </div>
        
-        {hasCameraPermission === false && status !== 'error' && (
+        {hasCameraPermission === false && (
             <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Camera Not Available</AlertTitle>
+                <AlertTitle>Error</AlertTitle>
                 <AlertDescription>
-                    Could not access camera. Please ensure permissions are granted and no other app is using it.
+                    {errorMessage || 'Camera not available. Please ensure permissions are granted.'}
                 </AlertDescription>
             </Alert>
         )}
