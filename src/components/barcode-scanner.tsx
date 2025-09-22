@@ -1,200 +1,166 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader2, AlertCircle, CheckCircle, XCircle, Video } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
-
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { barcodeProductLookup, type BarcodeProductLookupOutput } from '@/ai/flows/barcode-product-lookup';
+import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import type { BarcodeProductLookupOutput } from '@/ai/flows/barcode-product-lookup';
+import { barcodeProductLookup } from '@/ai/flows/barcode-product-lookup';
 
 interface BarcodeScannerProps {
   onScan: (product: BarcodeProductLookupOutput) => void;
   onClose: () => void;
 }
 
-type ScanStatus = 'idle' | 'waiting' | 'scanning' | 'loading' | 'success' | 'error';
-
 export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
-  const [status, setStatus] = useState<ScanStatus>('waiting');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
-
   const videoRef = useRef<HTMLVideoElement>(null);
   const codeReaderRef = useRef(new BrowserMultiFormatReader());
+  const [status, setStatus] = useState<'scanning' | 'loading' | 'error'>('scanning');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const { toast } = useToast();
 
-  const handleProductFound = (product: BarcodeProductLookupOutput) => {
-    setStatus('success');
-    onScan(product);
-  };
-
-  const handleProductError = (errorMsg: string) => {
-    setErrorMessage(errorMsg);
-    setStatus('error');
-    console.error(errorMsg);
-    setTimeout(() => {
-      setStatus('scanning');
-      setErrorMessage(null);
-    }, 2500);
-  };
-
-  const lookupBarcode = useCallback(
-    async (barcode: string) => {
-      setStatus('loading');
-
-      try {
-        const result = await barcodeProductLookup({ barcode });
-        if (result?.productName && result.productName.toLowerCase() !== 'not found' && result.productName.toLowerCase() !== 'unknown') {
-          result.imageUrl = `https://picsum.photos/seed/${result.productId || barcode}/400/400`;
-          handleProductFound(result);
-        } else {
-          handleProductError('Product not found for this barcode.');
-        }
-      } catch (e: any) {
-        handleProductError(e.message || 'Product lookup failed.');
+  const lookupBarcode = useCallback(async (barcode: string) => {
+    setStatus('loading');
+    try {
+      const product = await barcodeProductLookup({ barcode });
+      if (product && product.productName) {
+         onScan(product);
+      } else {
+        throw new Error("Product not found for this barcode.");
       }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [onScan] 
-  );
-  
-  const statusRef = useRef(status);
-  useEffect(() => {
-      statusRef.current = status;
-  }, [status]);
+    } catch (error) {
+      console.error('Barcode lookup failed:', error);
+      setStatus('error');
+      setErrorMessage('Could not find a product for the scanned barcode. Please try another.');
+      // Reset to scanning after a delay to allow user to see the message
+      setTimeout(() => {
+          setStatus('scanning');
+          setErrorMessage(null);
+      }, 3000);
+    }
+  }, [onScan]);
 
   useEffect(() => {
     const codeReader = codeReaderRef.current;
-  
+    let stream: MediaStream;
+
     const startScanning = async () => {
-      if (!videoRef.current) {
-        return;
-      }
-  
+      if (!videoRef.current) return;
+
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment' },
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
         });
-        
         setHasCameraPermission(true);
-        setStatus('scanning');
         
         if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
-        
-        await codeReader.decodeFromVideoDevice(undefined, videoRef.current, (result, error) => {
-            if (result) {
-                if (statusRef.current === 'scanning') {
-                  lookupBarcode(result.getText());
-                }
-            }
-            if (error && !(error instanceof NotFoundException)) {
-                console.error('ZXing decode error:', error);
-            }
-        });
+            videoRef.current.srcObject = stream;
+            await videoRef.current.play();
 
+            codeReader.decodeFromVideoDevice(
+                null, 
+                videoRef.current,
+                (result, error) => {
+                    if (result && status === 'scanning') {
+                        lookupBarcode(result.getText());
+                    }
+                    if (error && !(error instanceof NotFoundException)) {
+                        console.error('ZXing decode error:', error);
+                    }
+                }
+            );
+        }
       } catch (err: any) {
-          console.error('Camera or scanning error:', err);
-          setHasCameraPermission(false);
-          setStatus('error');
-          let message = 'Could not access camera.';
-          if (err.name === 'NotAllowedError') {
-              message = 'Camera permission denied. Please enable it in your browser settings.';
-          } else if (err.name === 'NotSupportedError' || err.message.includes('not supported')) {
-              message = 'This browser is not supported for scanning.';
-          }
-          setErrorMessage(message);
-          toast({
-              variant: 'destructive',
-              title: 'Scanner Error',
-              description: message,
-          });
-          onClose();
+        console.error('Camera error:', err);
+        setHasCameraPermission(false);
+        setStatus('error');
+        setErrorMessage(
+          err.name === 'NotAllowedError'
+            ? 'Camera permission denied. Please enable it in your browser settings.'
+            : 'Could not access camera.'
+        );
+        toast({
+            variant: 'destructive',
+            title: 'Camera Error',
+            description: err.name === 'NotAllowedError' ? 'Camera permission denied. Please enable it in your browser settings.' : 'Could not access camera.',
+        });
+        onClose(); // Close dialog on critical camera error
       }
     };
-  
+
     startScanning();
-  
+
     return () => {
       codeReader.reset();
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
     };
-  }, [lookupBarcode, onClose, toast]);
+  }, [status, lookupBarcode, onClose, toast]);
 
-
-  const StatusOverlay = () => {
-    switch (status) {
-      case 'waiting':
-        return (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/50 text-lg font-semibold rounded-lg">
-            <Video className="mb-2 h-6 w-6" /> Starting Camera...
-          </div>
-        );
-      case 'loading':
-        return (
-          <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-white">
-            <Loader2 className="h-10 w-10 animate-spin" />
-            <span className="mt-4 text-lg">Looking up product...</span>
-          </div>
-        );
-      case 'success':
-        return (
-          <div className="absolute inset-0 bg-green-500/80 flex flex-col items-center justify-center text-white">
-            <CheckCircle className="h-12 w-12" />
-            <span className="mt-4 text-lg font-semibold">Product Added!</span>
-          </div>
-        );
-      case 'error':
-        return (
-          <div className="absolute inset-0 bg-destructive/80 flex flex-col items-center justify-center text-white text-center p-4">
-            <XCircle className="h-12 w-12" />
-            <span className="mt-4 text-lg font-semibold">Scan Error</span>
-            <p className="text-sm">{errorMessage}</p>
-          </div>
-        );
-      case 'scanning':
-        return (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-[90%] h-1/2 border-y-4 border-dashed border-white/50 rounded-lg" />
-             <div className="absolute top-2 left-2 right-2 text-white text-center bg-black/30 p-1 rounded-md text-xs">Point camera at a barcode</div>
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-headline">Scan Barcode</DialogTitle>
-          <DialogDescription>Center the product's barcode inside the frame.</DialogDescription>
+          <DialogTitle>Scan Barcode</DialogTitle>
+          <DialogDescription>
+            Point your camera at a product's barcode.
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="my-4 flex aspect-video w-full items-center justify-center rounded-lg bg-secondary overflow-hidden relative">
-          <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted />
-          <StatusOverlay />
+        <div className="relative aspect-video w-full overflow-hidden rounded-md bg-muted">
+          <video
+            ref={videoRef}
+            className="h-full w-full object-cover"
+            playsInline
+            muted
+            autoPlay
+          />
+          {status === 'loading' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white">
+              <Loader2 className="mb-2 h-8 w-8 animate-spin" />
+              <p>Looking up product...</p>
+            </div>
+          )}
+           <div className="absolute inset-0 z-10" style={{
+            background: 'linear-gradient(to right, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0) 20%, rgba(0,0,0,0) 80%, rgba(0,0,0,0.4) 100%), linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0) 20%, rgba(0,0,0,0) 80%, rgba(0,0,0,0.4) 100%)',
+            boxShadow: 'inset 0 0 0 4px hsl(var(--primary))'
+           }}/>
         </div>
-
+        
         {hasCameraPermission === false && (
           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Camera Access Denied</AlertTitle>
+            <AlertTitle>Camera Access Required</AlertTitle>
             <AlertDescription>
-                {errorMessage || "Please enable camera permissions in your browser settings."}
+              Please allow camera access in your browser settings to use this feature.
             </AlertDescription>
           </Alert>
         )}
+        
+        {status === 'error' && (
+            <Alert variant="destructive">
+                <AlertTitle>Scan Error</AlertTitle>
+                <AlertDescription>{errorMessage}</AlertDescription>
+            </Alert>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
