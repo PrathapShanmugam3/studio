@@ -19,6 +19,10 @@ export async function register(formData: FormData) {
   redirect('/');
 }
 
+export async function logout() {
+  redirect('/');
+}
+
 export async function placeOrder(cartItems: any) {
     // Mock order placement
     console.log("Order placed:", cartItems);

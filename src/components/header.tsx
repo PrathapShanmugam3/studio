@@ -6,6 +6,15 @@ import { useCart } from '@/context/cart-context';
 import { Button } from './ui/button';
 import { Sheet, SheetTrigger } from './ui/sheet';
 import { Cart } from './cart';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { logout } from '@/lib/actions';
 
 export function Header() {
   const { itemCount } = useCart();
@@ -35,7 +44,25 @@ export function Header() {
                 <span className="sr-only">Open cart</span>
               </Button>
             </SheetTrigger>
-            <UserCircle className="h-7 w-7 text-muted-foreground" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <UserCircle className="h-7 w-7 text-muted-foreground" />
+                  <span className="sr-only">Toggle user menu</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                   <form action={logout} className="w-full">
+                    <button type="submit" className="w-full text-left px-2 py-1.5 text-sm">
+                        Logout
+                    </button>
+                   </form>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </nav>
         </div>
       </header>
