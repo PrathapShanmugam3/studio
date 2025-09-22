@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -78,56 +77,57 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   }, [status, onScan]);
 
   useEffect(() => {
+    let stream: MediaStream | null = null;
+    const codeReader = codeReaderRef.current;
+
     const startScanning = async () => {
       if (!videoRef.current) return;
-      
+
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+        });
         setHasCameraPermission(true);
         videoRef.current.srcObject = stream;
-        
-        // Ensure the video element is playing before decoding.
-        videoRef.current.oncanplay = () => {
-            if (videoRef.current) {
-                codeReaderRef.current.decodeFromStream(stream, videoRef.current, (result, err) => {
-                  if (result && status === 'scanning') {
-                    lookupBarcode(result.getText());
-                  }
-                  if (err && !(err instanceof NotFoundException)) {
-                      console.error('ZXing detection error:', err);
-                  }
-                });
-            }
-        };
 
-      } catch (error) {
-        console.error('Camera access error:', error);
+        // Wait for the video to play
+        await videoRef.current.play();
+
+        codeReader.decodeFromVideoDevice(
+          undefined,
+          videoRef.current,
+          (result, error) => {
+            if (result && status === 'scanning') {
+              lookupBarcode(result.getText());
+            }
+            if (error && !(error instanceof NotFoundException)) {
+              console.error('ZXing decode error:', error);
+            }
+          }
+        );
+      } catch (err: any) {
+        console.error('Camera error:', err);
         setHasCameraPermission(false);
         setStatus('error');
-        let friendlyMessage = 'Could not access the camera. Please check permissions.';
-        if (error instanceof DOMException) {
-            if (error.name === 'NotAllowedError') {
-                friendlyMessage = 'Camera permission was denied. You need to allow camera access to scan barcodes.';
-            } else if (error.name === 'NotFoundError') {
-                friendlyMessage = 'No camera found. Please connect a camera to use this feature.';
-            }
-        }
+        const friendlyMessage = err.name === 'NotAllowedError'
+            ? 'Camera permission denied. Please allow camera access in your browser settings.'
+            : 'Could not access camera. Ensure it is not in use by another application.';
         setErrorMessage(friendlyMessage);
         toast({
           variant: 'destructive',
           title: 'Camera Error',
           description: friendlyMessage,
         });
-        onClose(); // Close the dialog if we can't get camera permission
+        onClose();
       }
     };
-    
+
     startScanning();
 
     return () => {
-      codeReaderRef.current.reset();
-      if (videoRef.current && videoRef.current.srcObject) {
-        (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+      codeReader.reset();
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
       }
     };
   }, [lookupBarcode, onClose, status, toast]);
@@ -186,9 +186,9 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         {hasCameraPermission === false && (
             <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Camera Access Denied</AlertTitle>
+                <AlertTitle>Camera Error</AlertTitle>
                 <AlertDescription>
-                    Please enable camera permissions in your browser settings to use this app.
+                    {errorMessage || "Could not access camera. Please check permissions and ensure it's not in use."}
                 </AlertDescription>
             </Alert>
         )}
@@ -196,5 +196,3 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     </Dialog>
   );
 }
-
-    
