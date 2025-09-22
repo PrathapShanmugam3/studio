@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Loader2, AlertCircle, CheckCircle, XCircle, Video } from 'lucide-react';
-import { BrowserMultiFormatReader, NotFoundException, type IScannerControls } from '@zxing/library';
+import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
 
 import {
   Dialog,
@@ -66,32 +66,34 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     [onScan] 
   );
   
+  const statusRef = useRef(status);
+  useEffect(() => {
+      statusRef.current = status;
+  }, [status]);
+
   useEffect(() => {
     const codeReader = codeReaderRef.current;
-    let controls: IScannerControls | null = null;
   
     const startScanning = async () => {
       if (!videoRef.current) {
-        console.log("Video ref not ready");
         return;
       }
   
-      setStatus('scanning');
       try {
-        // Get camera permission and stream
         const stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: 'environment' },
         });
+        
         setHasCameraPermission(true);
-
+        setStatus('scanning');
+        
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
         }
-
-        controls = await codeReader.decodeFromVideoDevice(null, videoRef.current, (result, error) => {
+        
+        await codeReader.decodeFromVideoDevice(undefined, videoRef.current, (result, error) => {
             if (result) {
-                // A barcode has been found
                 if (statusRef.current === 'scanning') {
                   lookupBarcode(result.getText());
                 }
@@ -109,7 +111,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           if (err.name === 'NotAllowedError') {
               message = 'Camera permission denied. Please enable it in your browser settings.';
           } else if (err.name === 'NotSupportedError' || err.message.includes('not supported')) {
-              message = 'Barcode Detector API is not supported by this browser.';
+              message = 'This browser is not supported for scanning.';
           }
           setErrorMessage(message);
           toast({
@@ -124,16 +126,10 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     startScanning();
   
     return () => {
-      if (controls) {
-        controls.stop();
-      }
+      codeReader.reset();
     };
   }, [lookupBarcode, onClose, toast]);
 
-  const statusRef = useRef(status);
-  useEffect(() => {
-      statusRef.current = status;
-  }, [status]);
 
   const StatusOverlay = () => {
     switch (status) {
