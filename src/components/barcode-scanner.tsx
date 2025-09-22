@@ -23,7 +23,7 @@ interface BarcodeScannerProps {
 type ScanStatus = 'idle' | 'scanning' | 'loading' | 'success' | 'error';
 
 export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
-  const [status, setStatus] = useState<ScanStatus>('scanning');
+  const [status, setStatus] = useState<ScanStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -83,6 +83,8 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     const startScanning = async () => {
       if (!videoRef.current) return;
 
+      setStatus('scanning');
+
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment' },
@@ -90,7 +92,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         setHasCameraPermission(true);
         videoRef.current.srcObject = stream;
 
-        // Wait for the video to play
         await videoRef.current.play();
 
         codeReader.decodeFromVideoDevice(
@@ -106,19 +107,26 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           }
         );
       } catch (err: any) {
-        console.error('Camera error:', err);
+        console.error('Camera initialization failed:', err);
         setHasCameraPermission(false);
         setStatus('error');
-        const friendlyMessage = err.name === 'NotAllowedError'
-            ? 'Camera permission denied. Please allow camera access in your browser settings.'
-            : 'Could not access camera. Ensure it is not in use by another application.';
+        let friendlyMessage = 'Could not access camera.';
+        if (err instanceof DOMException) {
+            if (err.name === 'NotAllowedError') {
+                friendlyMessage = 'Camera permission was denied. Please allow camera access in your browser settings.';
+            } else if (err.name === 'NotFoundError') {
+                friendlyMessage = 'No camera found. Please ensure a camera is connected.';
+            } else if (err.name === 'NotReadableError') {
+                friendlyMessage = 'The camera is already in use by another application.';
+            }
+        }
         setErrorMessage(friendlyMessage);
         toast({
           variant: 'destructive',
           title: 'Camera Error',
           description: friendlyMessage,
+          duration: 9000
         });
-        onClose();
       }
     };
 
@@ -130,7 +138,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         stream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [lookupBarcode, onClose, status, toast]);
+  }, [lookupBarcode, status, toast]);
 
   const StatusOverlay = () => {
     switch (status) {
@@ -149,6 +157,9 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           </div>
         );
       case 'error':
+         if (!errorMessage?.includes('Product not found')) {
+            return null; // Don't show overlay for product not found error
+         }
         return (
           <div className="absolute inset-0 bg-destructive/80 flex flex-col items-center justify-center text-white text-center p-4">
             <XCircle className="h-12 w-12" />
@@ -157,7 +168,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           </div>
         );
       case 'scanning':
-         // A visual guide for the user
          return (
              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                  <div className="w-[90%] h-1/2 border-y-4 border-dashed border-white/50 rounded-lg" />
@@ -174,7 +184,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         <DialogHeader>
           <DialogTitle className="font-headline">Scan Barcode</DialogTitle>
           <DialogDescription>
-            Center the product's barcode inside the frame. The scanner is active.
+            Center the product's barcode inside the frame.
           </DialogDescription>
         </DialogHeader>
         
@@ -183,12 +193,12 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             <StatusOverlay />
         </div>
        
-        {hasCameraPermission === false && (
+        {hasCameraPermission === false && errorMessage && (
             <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Camera Error</AlertTitle>
+                <AlertTitle>Camera Initialization Failed</AlertTitle>
                 <AlertDescription>
-                    {errorMessage || "Could not access camera. Please check permissions and ensure it's not in use."}
+                    {errorMessage}
                 </AlertDescription>
             </Alert>
         )}
