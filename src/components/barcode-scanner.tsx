@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Loader2, AlertCircle, CheckCircle, XCircle, Video } from 'lucide-react';
-import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
+import { BrowserMultiFormatReader, NotFoundException, type IScannerControls } from '@zxing/library';
 
 import {
   Dialog,
@@ -48,8 +48,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
   const lookupBarcode = useCallback(
     async (barcode: string) => {
-      if (statusRef.current !== 'scanning') return;
-
       setStatus('loading');
 
       try {
@@ -65,83 +63,77 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [] // Dependencies removed to prevent re-creation of the function
+    [onScan] 
   );
   
+  useEffect(() => {
+    const codeReader = codeReaderRef.current;
+    let controls: IScannerControls | null = null;
+  
+    const startScanning = async () => {
+      if (!videoRef.current) {
+        console.log("Video ref not ready");
+        return;
+      }
+  
+      setStatus('scanning');
+      try {
+        // Get camera permission and stream
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' },
+        });
+        setHasCameraPermission(true);
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+
+        controls = await codeReader.decodeFromVideoDevice(null, videoRef.current, (result, error) => {
+            if (result) {
+                // A barcode has been found
+                if (statusRef.current === 'scanning') {
+                  lookupBarcode(result.getText());
+                }
+            }
+            if (error && !(error instanceof NotFoundException)) {
+                console.error('ZXing decode error:', error);
+            }
+        });
+
+      } catch (err: any) {
+          console.error('Camera or scanning error:', err);
+          setHasCameraPermission(false);
+          setStatus('error');
+          let message = 'Could not access camera.';
+          if (err.name === 'NotAllowedError') {
+              message = 'Camera permission denied. Please enable it in your browser settings.';
+          } else if (err.name === 'NotSupportedError' || err.message.includes('not supported')) {
+              message = 'Barcode Detector API is not supported by this browser.';
+          }
+          setErrorMessage(message);
+          toast({
+              variant: 'destructive',
+              title: 'Scanner Error',
+              description: message,
+          });
+          onClose();
+      }
+    };
+  
+    startScanning();
+  
+    return () => {
+      if (controls) {
+        controls.stop();
+      }
+    };
+  }, [lookupBarcode, onClose, toast]);
+
   const statusRef = useRef(status);
   useEffect(() => {
       statusRef.current = status;
   }, [status]);
-  
-  useEffect(() => {
-    let stream: MediaStream | null = null;
-    const codeReader = codeReaderRef.current;
-
-    const startScanning = async () => {
-        if (!videoRef.current) {
-            return;
-        }
-
-        setStatus('scanning');
-        try {
-            // Get camera permission and stream
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment' },
-            });
-            setHasCameraPermission(true);
-
-            if (videoRef.current) {
-              videoRef.current.srcObject = stream;
-              await videoRef.current.play();
-            }
-
-            // Start decoding from the video device
-            await codeReader.decodeFromVideoDevice(undefined, videoRef.current, (result, error) => {
-                if (result) {
-                    // A barcode has been found
-                    if (statusRef.current === 'scanning') {
-                        lookupBarcode(result.getText());
-                    }
-                }
-                if (error && !(error instanceof NotFoundException)) {
-                    // An error occurred during decoding, but it's not "not found"
-                    console.error('ZXing decode error:', error);
-                    // Optionally, handle this error in the UI
-                }
-            });
-
-        } catch (err: any) {
-            console.error('Camera or scanning error:', err);
-            setHasCameraPermission(false);
-            setStatus('error');
-            let message = 'Could not access camera.';
-            if (err.name === 'NotAllowedError') {
-                message = 'Camera permission denied. Please enable it in your browser settings.';
-            } else if (err.name === 'NotSupportedError' || err.message.includes('not supported')) {
-                message = 'Barcode Detector API is not supported by this browser.';
-            }
-            setErrorMessage(message);
-            toast({
-                variant: 'destructive',
-                title: 'Scanner Error',
-                description: message,
-            });
-            onClose();
-        }
-    };
-
-    startScanning();
-
-    // Cleanup function to stop tracks and reset the reader
-    return () => {
-        codeReader.reset();
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-        }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lookupBarcode, onClose]);
-
 
   const StatusOverlay = () => {
     switch (status) {
