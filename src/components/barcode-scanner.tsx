@@ -5,7 +5,6 @@ import { BrowserMultiFormatReader, NotFoundException, Result, Exception } from '
 import { Loader2, CameraOff, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { BarcodeProductLookupOutput } from '@/ai/flows/barcode-product-lookup';
-import { barcodeProductLookup } from '@/ai/flows/barcode-product-lookup';
 import { useToast } from '@/hooks/use-toast';
 
 interface BarcodeScannerProps {
@@ -24,34 +23,17 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const processBarcode = useCallback(async (barcodeText: string) => {
     if (isProcessingRef.current) return;
     isProcessingRef.current = true;
-    setStatus('loading');
+    
+    console.log(`Detected barcode: ${barcodeText}`);
+    
+    toast({
+        title: "Barcode Scanned",
+        description: `Value: ${barcodeText}`,
+    });
 
-    try {
-      const product = await barcodeProductLookup({ barcode: barcodeText });
-      if (product?.productName && !['not found', 'product not found'].includes(product.productName.toLowerCase())) {
-        product.imageUrl = product.imageUrl || `https://picsum.photos/seed/${product.productId || barcodeText}/400/400`;
-        onScan(product);
-        onClose();
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Product Not Found',
-          description: 'No product could be found for the scanned barcode.',
-        });
-        isProcessingRef.current = false;
-        setStatus('scanning');
-      }
-    } catch (err: any) {
-      console.error('Lookup error', err);
-      toast({
-        variant: 'destructive',
-        title: 'Lookup Failed',
-        description: err?.message || 'Failed to lookup barcode. Try again.',
-      });
-      isProcessingRef.current = false;
-      setStatus('scanning');
-    }
-  }, [onScan, onClose, toast]);
+    onClose();
+
+  }, [onClose, toast]);
 
   useEffect(() => {
     let isMounted = true;
