@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader2, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
-import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
+import { Loader2, AlertCircle, CheckCircle, XCircle, Video } from 'lucide-react';
+import { BrowserMultiFormatReader, NotFoundException, type IScannerControls } from '@zxing/library';
 
 import {
   Dialog,
@@ -16,18 +16,20 @@ import { barcodeProductLookup, type BarcodeProductLookupOutput } from '@/ai/flow
 import { useToast } from '@/hooks/use-toast';
 
 interface BarcodeScannerProps {
-    onScan: (product: BarcodeProductLookupOutput) => void;
-    onClose: () => void;
+  onScan: (product: BarcodeProductLookupOutput) => void;
+  onClose: () => void;
 }
 
-type ScanStatus = 'idle' | 'scanning' | 'loading' | 'success' | 'error';
+type ScanStatus = 'idle' | 'waiting' | 'scanning' | 'loading' | 'success' | 'error';
 
 export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
-  const [status, setStatus] = useState<ScanStatus>('idle');
+  const [status, setStatus] = useState<ScanStatus>('waiting');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const codeReaderRef = useRef(new BrowserMultiFormatReader());
+  const controlsRef = useRef<IScannerControls | null>(null);
   const scannedBarcodes = useRef(new Set<string>());
   const { toast } = useToast();
 
@@ -36,112 +38,106 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     onScan(product);
     setTimeout(() => {
         setStatus('scanning');
+        scannedBarcodes.current.delete(product.productId || '');
     }, 1500);
-    // Allow the same barcode to be scanned again after 5 seconds
-    setTimeout(() => {
-        if (product.productId) {
-            scannedBarcodes.current.delete(product.productId);
-        }
-    }, 5000);
-  };
-  
-  const handleProductError = (barcode: string, errorMsg: string) => {
-      setErrorMessage(errorMsg);
-      setStatus('error');
-      console.error(errorMsg);
-      setTimeout(() => {
-          setStatus('scanning');
-          setErrorMessage(null);
-          scannedBarcodes.current.delete(barcode);
-      }, 2500);
   };
 
-  const lookupBarcode = useCallback(async (barcode: string) => {
+  const handleProductError = (barcode: string, errorMsg: string) => {
+    setErrorMessage(errorMsg);
+    setStatus('error');
+    console.error(errorMsg);
+    setTimeout(() => {
+      setStatus('scanning');
+      setErrorMessage(null);
+      scannedBarcodes.current.delete(barcode);
+    }, 2500);
+  };
+
+  const lookupBarcode = useCallback(
+    async (barcode: string) => {
       if (scannedBarcodes.current.has(barcode) || status !== 'scanning') return;
-      
+
       setStatus('loading');
       scannedBarcodes.current.add(barcode);
 
       try {
-          const result = await barcodeProductLookup({ barcode });
-          if (result && result.productName && result.productName.toLowerCase() !== 'not found' && result.productName.trim() !== '') {
-              // Use a consistent placeholder image based on the product ID or barcode
-              result.imageUrl = `https://picsum.photos/seed/${result.productId || barcode}/400/400`;
-              handleProductFound(result);
-          } else {
-              handleProductError(barcode, 'Product not found for this barcode.');
-          }
+        const result = await barcodeProductLookup({ barcode });
+        if (result?.productName && result.productName.toLowerCase() !== 'not found') {
+          result.imageUrl = `https://picsum.photos/seed/${result.productId || barcode}/400/400`;
+          handleProductFound(result);
+        } else {
+          handleProductError(barcode, 'Product not found.');
+        }
       } catch (e: any) {
-          handleProductError(barcode, e.message || 'Failed to look up product.');
+        handleProductError(barcode, e.message || 'Lookup failed.');
       }
-  }, [status, onScan]);
+    },
+    [status, onScan] // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
-  useEffect(() => {
-    let stream: MediaStream | null = null;
-    const codeReader = codeReaderRef.current;
+ const startCamera = useCallback(async () => {
+    if (!videoRef.current || status !== 'waiting') return;
 
-    const startScanning = async () => {
-      if (!videoRef.current) return;
-
-      setStatus('scanning');
-
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
-        });
+    setStatus('scanning');
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         setHasCameraPermission(true);
-        videoRef.current.srcObject = stream;
 
-        await videoRef.current.play();
-
-        codeReader.decodeFromVideoDevice(
-          undefined,
-          videoRef.current,
-          (result, error) => {
-            if (result && status === 'scanning') {
-              lookupBarcode(result.getText());
-            }
-            if (error && !(error instanceof NotFoundException)) {
-              console.error('ZXing decode error:', error);
-            }
-          }
-        );
-      } catch (err: any) {
-        console.error('Camera initialization failed:', err);
+        if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            // The `decodeFromVideoDevice` will internally handle play()
+            controlsRef.current = await codeReaderRef.current.decodeFromVideoDevice(undefined, videoRef.current, (result, error, controls) => {
+                if (result) {
+                    lookupBarcode(result.getText());
+                }
+                if (error && !(error instanceof NotFoundException)) {
+                    console.error('ZXing decode error:', error);
+                    setErrorMessage("Error decoding barcode.")
+                    setStatus('error')
+                }
+            });
+        }
+    } catch (err: any) {
+        console.error('Camera error:', err);
         setHasCameraPermission(false);
         setStatus('error');
-        let friendlyMessage = 'Could not access camera.';
-        if (err instanceof DOMException) {
-            if (err.name === 'NotAllowedError') {
-                friendlyMessage = 'Camera permission was denied. Please allow camera access in your browser settings.';
-            } else if (err.name === 'NotFoundError') {
-                friendlyMessage = 'No camera found. Please ensure a camera is connected.';
-            } else if (err.name === 'NotReadableError') {
-                friendlyMessage = 'The camera is already in use by another application.';
-            }
+        if (err.name === 'NotAllowedError') {
+            setErrorMessage('Camera permission denied. Please enable it in your browser settings.');
+        } else {
+            setErrorMessage('Could not access camera. It may be in use by another application.');
         }
-        setErrorMessage(friendlyMessage);
         toast({
-          variant: 'destructive',
-          title: 'Camera Error',
-          description: friendlyMessage,
-          duration: 9000
+            variant: 'destructive',
+            title: 'Camera Error',
+            description: errorMessage || 'Failed to start camera.',
         });
-      }
-    };
+        onClose();
+    }
+}, [status, lookupBarcode, onClose, toast, errorMessage]);
 
-    startScanning();
 
+  useEffect(() => {
+    // This effect handles cleanup
     return () => {
-      codeReader.reset();
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
+      controlsRef.current?.stop();
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [lookupBarcode, status, toast]);
+  }, []);
 
   const StatusOverlay = () => {
     switch (status) {
+      case 'waiting':
+        return (
+          <button
+            onClick={startCamera}
+            className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/50 text-lg font-semibold rounded-lg hover:bg-black/60 transition-colors"
+          >
+            <Video className="mb-2 h-6 w-6" /> Start Camera
+          </button>
+        );
       case 'loading':
         return (
           <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-white">
@@ -157,9 +153,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           </div>
         );
       case 'error':
-         if (!errorMessage?.includes('Product not found')) {
-            return null; // Don't show overlay for product not found error
-         }
         return (
           <div className="absolute inset-0 bg-destructive/80 flex flex-col items-center justify-center text-white text-center p-4">
             <XCircle className="h-12 w-12" />
@@ -168,11 +161,12 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           </div>
         );
       case 'scanning':
-         return (
-             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                 <div className="w-[90%] h-1/2 border-y-4 border-dashed border-white/50 rounded-lg" />
-             </div>
-         );
+        return (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-[90%] h-1/2 border-y-4 border-dashed border-white/50 rounded-lg" />
+             <div className="absolute top-2 left-2 right-2 text-white text-center bg-black/30 p-1 rounded-md text-xs">Scanner is active</div>
+          </div>
+        );
       default:
         return null;
     }
@@ -183,24 +177,20 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="font-headline">Scan Barcode</DialogTitle>
-          <DialogDescription>
-            Center the product's barcode inside the frame.
-          </DialogDescription>
+          <DialogDescription>Center the product's barcode inside the frame.</DialogDescription>
         </DialogHeader>
-        
+
         <div className="my-4 flex aspect-video w-full items-center justify-center rounded-lg bg-secondary overflow-hidden relative">
-            <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted />
-            <StatusOverlay />
+          <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted />
+          <StatusOverlay />
         </div>
-       
-        {hasCameraPermission === false && errorMessage && (
-            <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Camera Initialization Failed</AlertTitle>
-                <AlertDescription>
-                    {errorMessage}
-                </AlertDescription>
-            </Alert>
+
+        {hasCameraPermission === false && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Camera Access Denied</AlertTitle>
+            <AlertDescription>Enable camera permissions in your browser settings.</AlertDescription>
+          </Alert>
         )}
       </DialogContent>
     </Dialog>
