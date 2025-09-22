@@ -159,7 +159,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       case 'scanning':
          return (
              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <Scan className="h-1/2 w-1/2 text-white/40" />
+                <div className="w-full h-1/2 border-y-4 border-dashed border-white/50"></div>
              </div>
          );
       default:
