@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Loader2, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
+
 import {
   Dialog,
   DialogContent,
@@ -25,8 +27,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const scannerRef = useRef<any | null>(null); // To hold BarcodeDetector instance
-  const animationFrameRef = useRef<number | null>(null);
+  const codeReaderRef = useRef(new BrowserMultiFormatReader());
   const scannedBarcodes = useRef(new Set<string>());
   const { toast } = useToast();
 
@@ -34,13 +35,10 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     setStatus('success');
     onScan(product);
     setTimeout(() => {
-        // After showing success for a bit, go back to scanning
-        // but keep the barcode in the scanned set for a longer duration
-        // to prevent immediate re-scans of the same item.
         setStatus('scanning');
     }, 1500);
     setTimeout(() => {
-        if(product.productId){
+        if (product.productId) {
             scannedBarcodes.current.delete(product.productId);
         }
     }, 5000);
@@ -64,9 +62,8 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       scannedBarcodes.current.add(barcode);
 
       try {
-          const result = await barcodeProductLookup({ barcode: barcode });
+          const result = await barcodeProductLookup({ barcode });
           if (result && result.productName && result.productName.toLowerCase() !== 'not found' && result.productName.trim() !== '') {
-              // Use a more stable seed for placeholder images
               result.imageUrl = `https://picsum.photos/seed/${result.productId || barcode}/400/400`;
               handleProductFound(result);
           } else {
@@ -77,91 +74,52 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       }
   }, [status, onScan]);
 
+  const startScanning = useCallback(async () => {
+    if (!videoRef.current) return;
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      setHasCameraPermission(true);
+      videoRef.current.srcObject = stream;
 
-  const detectBarcode = useCallback(async () => {
-    if (videoRef.current && scannerRef.current && videoRef.current.readyState >= 2) {
-      try {
-        const barcodes = await scannerRef.current.detect(videoRef.current);
-        if (barcodes.length > 0) {
-          for (const barcode of barcodes) {
-            if (barcode.rawValue) {
-                lookupBarcode(barcode.rawValue);
-                // Once we start a lookup, pause detection briefly
-                return;
-            }
-          }
+      await codeReaderRef.current.decodeFromStream(stream, videoRef.current, (result, err) => {
+        if (result && status === 'scanning') {
+          lookupBarcode(result.getText());
         }
-      } catch (error) {
-        console.error('Barcode detection error:', error);
+        if (err && !(err instanceof NotFoundException)) {
+            console.error('ZXing detection error:', err);
+        }
+      });
+
+    } catch (error) {
+      console.error('Camera access error:', error);
+      setHasCameraPermission(false);
+      setStatus('error');
+      let friendlyMessage = 'Camera access was denied. Please grant permission in your browser settings.';
+      if (error instanceof DOMException && error.name === 'NotAllowedError') {
+        friendlyMessage = 'Camera permission was denied. You need to allow camera access to scan barcodes.';
+      } else if (error instanceof DOMException && error.name === 'NotFoundError') {
+        friendlyMessage = 'No camera found. Please connect a camera to use this feature.';
       }
+      setErrorMessage(friendlyMessage);
+      toast({
+        variant: 'destructive',
+        title: 'Camera Error',
+        description: friendlyMessage,
+      });
+      onClose();
     }
-    // Continue scanning if no barcode was found or lookup is not in progress
-    if (status === 'scanning') {
-      animationFrameRef.current = requestAnimationFrame(detectBarcode);
-    }
-  }, [lookupBarcode, status]);
+  }, [lookupBarcode, onClose, toast, status]);
 
   useEffect(() => {
-    const initializeScanner = async () => {
-      // @ts-ignore
-      if (!('BarcodeDetector' in window) || !window.BarcodeDetector) {
-        setStatus('error');
-        setErrorMessage('Barcode Detector API is not supported by this browser.');
-        setHasCameraPermission(false);
-        return;
-      }
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        setHasCameraPermission(true);
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.playsInline = true;
-          videoRef.current.play().catch(console.error);
-        }
-        
-        // @ts-ignore
-        scannerRef.current = new window.BarcodeDetector({
-            formats: [ 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code' ],
-        });
-
-        // Start detection loop only when video is playing
-        const videoElement = videoRef.current;
-        if (videoElement) {
-            const handleVideoPlaying = () => {
-                animationFrameRef.current = requestAnimationFrame(detectBarcode);
-            };
-            videoElement.addEventListener('playing', handleVideoPlaying);
-            return () => {
-                videoElement.removeEventListener('playing', handleVideoPlaying);
-            };
-        }
-
-      } catch (error) {
-        console.error('Camera access error:', error);
-        setHasCameraPermission(false);
-        setStatus('error');
-        setErrorMessage('Camera access was denied. Please grant permission in your browser settings.');
-        toast({
-          variant: 'destructive',
-          title: 'Camera Access Denied',
-          description: 'Please enable camera permissions in your browser settings.',
-        });
-        onClose();
-      }
-    };
-
-    initializeScanner();
-
+    startScanning();
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
+      codeReaderRef.current.reset();
       if (videoRef.current && videoRef.current.srcObject) {
         (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
       }
     };
-  }, [detectBarcode, onClose, toast]);
+  }, [startScanning]);
 
   const StatusOverlay = () => {
     switch (status) {
@@ -198,7 +156,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     }
   };
 
-
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
@@ -214,16 +171,15 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             <StatusOverlay />
         </div>
        
-        {hasCameraPermission === false && (
+        {hasCameraPermission === false && errorMessage && (
             <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Error</AlertTitle>
                 <AlertDescription>
-                    {errorMessage || 'Camera not available. Please ensure permissions are granted.'}
+                    {errorMessage}
                 </AlertDescription>
             </Alert>
         )}
-        
       </DialogContent>
     </Dialog>
   );
