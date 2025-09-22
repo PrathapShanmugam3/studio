@@ -29,7 +29,7 @@ const AdminSidebar = () => {
       <SidebarHeader>
         <div className="flex items-center gap-2">
             <Button asChild variant="ghost" className="h-10 w-10 rounded-full p-0">
-                <Link href="/products">
+                <Link href="/products" prefetch={false}>
                     <Leaf className="h-7 w-7 text-primary" />
                 </Link>
             </Button>
@@ -40,7 +40,7 @@ const AdminSidebar = () => {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <Link href="/admin/dashboard">
+              <Link href="/admin/dashboard" prefetch={false}>
                 <LayoutDashboard />
                 Dashboard
               </Link>
@@ -48,7 +48,7 @@ const AdminSidebar = () => {
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <Link href="/admin/products">
+              <Link href="/admin/products" prefetch={false}>
                 <Package />
                 Products
               </Link>
@@ -56,7 +56,7 @@ const AdminSidebar = () => {
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <Link href="/admin/sell">
+              <Link href="/admin/sell" prefetch={false}>
                 <ShoppingCart />
                 Sell Product
               </Link>

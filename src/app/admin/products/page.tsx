@@ -54,7 +54,7 @@ export default function ProductsAdminPage() {
           </div>
           <div className='flex items-center gap-2'>
             <Button asChild size="sm" className="gap-1">
-              <Link href="/admin/products/new">
+              <Link href="/admin/products/new" prefetch={false}>
                 <PlusCircle className="h-3.5 w-3.5" />
                 <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
                   Add Product
@@ -114,7 +114,7 @@ export default function ProductsAdminPage() {
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Actions</DropdownMenuLabel>
                       <DropdownMenuItem asChild>
-                         <Link href={`/admin/products/edit/${product.id}`}>Edit</Link>
+                         <Link href={`/admin/products/edit/${product.id}`} prefetch={false}>Edit</Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
                         <DeleteProductForm productId={product.id} />
