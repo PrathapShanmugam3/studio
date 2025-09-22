@@ -15,6 +15,7 @@ import type { BarcodeProductLookupOutput } from '@/ai/flows/barcode-product-look
 import { barcodeProductLookup } from '@/ai/flows/barcode-product-lookup';
 import { Loader2, XCircle, CameraOff } from 'lucide-react';
 import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
+import { useToast } from '@/hooks/use-toast';
 
 interface BarcodeScannerProps {
   onScan: (product: BarcodeProductLookupOutput) => void;
@@ -27,53 +28,52 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   
   const [status, setStatus] = useState<'scanning' | 'loading' | 'error' | 'permission'>('scanning');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const processBarcode = useCallback(async (barcode: string) => {
     setStatus('loading');
     try {
       const product = await barcodeProductLookup({ barcode });
 
-      if (product?.productName && product.productName.toLowerCase() !== 'not found') {
+      if (product?.productName && product.productName.toLowerCase() !== 'not found' && product.productName.toLowerCase() !== 'product not found') {
         product.imageUrl = `https://picsum.photos/seed/${product.productId || barcode}/400/400`;
         onScan(product);
       } else {
-        setErrorMessage('Product not found for this barcode.');
-        setStatus('error');
+        toast({
+          variant: 'destructive',
+          title: 'Product Not Found',
+          description: 'No product could be found for the scanned barcode.',
+        });
+        setStatus('scanning'); // Go back to scanning
       }
     } catch (e: any) {
       console.error('Lookup error:', e);
-      setErrorMessage(e.message || 'Failed to lookup product.');
-      setStatus('error');
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to look up the product. Please try again.',
+      });
+      setStatus('scanning'); // Go back to scanning
     }
-  }, [onScan]);
+  }, [onScan, toast]);
 
   useEffect(() => {
     const codeReader = codeReaderRef.current;
     let isMounted = true;
 
-    const startScanning = async () => {
-      if (!videoRef.current) return;
-      
+    const startScanner = async () => {
+      if (!isMounted || !videoRef.current) return;
+
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
-        });
-
-        if (!isMounted) {
-            stream.getTracks().forEach((track) => track.stop());
-            return;
-        }
-
-        setStatus('scanning');
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-
         await codeReader.decodeFromVideoDevice(
-          undefined, // Use default camera
+          null, // use default camera
           videoRef.current,
-          (result, error) => {
-            if (!isMounted) return;
-            if (result && status !== 'loading') {
+          (result, error, controls) => {
+            if (!isMounted) {
+                controls.stop();
+                return;
+            }
+            if (result && status === 'scanning') {
                 processBarcode(result.getText());
             }
             if (error && !(error instanceof NotFoundException)) {
@@ -92,16 +92,12 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         }
       }
     };
-
-    startScanning();
+    
+    startScanner();
 
     return () => {
       isMounted = false;
       codeReader.reset();
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach((track) => track.stop());
-      }
     };
   }, [processBarcode, status]);
 
@@ -119,15 +115,13 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           <video
             ref={videoRef}
             className="h-full w-full object-cover"
-            muted
             playsInline
           />
           
-          {(status === 'permission' || status === 'error') && (
+          {(status === 'permission') && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 p-4 text-center text-white">
-              {status === 'permission' ? <CameraOff className="h-12 w-12 text-destructive" /> : <XCircle className="h-12 w-12 text-destructive" />}
+               <CameraOff className="h-12 w-12 text-destructive" />
               <p className="mt-4">{errorMessage}</p>
-              {status === 'error' && <Button onClick={() => setStatus('scanning')} className="mt-4">Try Again</Button>}
             </div>
           )}
 
