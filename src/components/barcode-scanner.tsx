@@ -65,7 +65,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             clearTimeout(timeoutId);
         }
     }
-  }, []);
+  }, [onClose, toast]);
 
   const handleScan = async () => {
     setLoading(true);
@@ -90,7 +90,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     }
   };
 
-
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
@@ -102,7 +101,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         </DialogHeader>
         
         <div className="my-4 flex aspect-video w-full items-center justify-center rounded-lg bg-secondary/50 overflow-hidden relative">
-            {hasCameraPermission && <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />}
+            <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
             
             {loading && (
                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white">
@@ -118,7 +117,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
                 <AlertTitle>Camera Access Required</AlertTitle>
                 <AlertDescription>
                     Please allow camera access to use this feature.
-                </AlertDescription>
+                </Description>
             </Alert>
         )}
         
