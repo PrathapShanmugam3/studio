@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { Barcode, Camera, Loader2, PlusCircle, AlertCircle } from 'lucide-react';
+import { Barcode, Loader2, AlertCircle, X, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -11,28 +11,78 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { barcodeProductLookup, type BarcodeProductLookupOutput } from '@/ai/flows/barcode-product-lookup';
-import { useCart } from '@/context/cart-context';
+import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
+
 
 export function BarcodeScanner() {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [product, setProduct] = useState<BarcodeProductLookupOutput | null>(null);
-  const { dispatch } = useCart();
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const { toast } = useToast();
+  const router = useRouter();
+
+
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    const getCameraPermission = async () => {
+      if (!isOpen) return;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        setHasCameraPermission(true);
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        // Barcode detection logic would go here. For now, we simulate it.
+        setTimeout(() => {
+          handleScan();
+        }, 3000); // Simulate scan after 3 seconds
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        setHasCameraPermission(false);
+        toast({
+          variant: 'destructive',
+          title: 'Camera Access Denied',
+          description: 'Please enable camera permissions in your browser settings to use this feature.',
+        });
+      }
+    };
+
+    if (isOpen) {
+        setProduct(null);
+        setError(null);
+        setLoading(false);
+        getCameraPermission();
+    }
+    
+
+    return () => {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+    }
+  }, [isOpen]);
 
   const handleScan = async () => {
     setLoading(true);
     setError(null);
-    setProduct(null);
     try {
       const result = await barcodeProductLookup({ barcode: '123456789012' });
-      // The AI can sometimes return an invalid image URL, so we replace it.
       result.imageUrl = `https://picsum.photos/seed/${result.productId || 'ai-product'}/400/400`;
       setProduct(result);
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+      }
+      setHasCameraPermission(null);
     } catch (e) {
       setError('Failed to look up product. Please try again.');
       console.error(e);
@@ -41,19 +91,16 @@ export function BarcodeScanner() {
     }
   };
 
-  const handleAddToCart = () => {
-    if (!product) return;
-    const cartProduct = {
-      id: product.productId,
-      name: product.productName,
-      description: product.description,
-      price: product.price,
-      stock: 1, // Assume stock is available
-      image: product.imageUrl,
-    };
-    dispatch({ type: 'ADD_ITEM', payload: cartProduct });
-    setIsOpen(false);
-  };
+  const handleAddProduct = () => {
+      if(!product) return;
+      // In a real app this would likely populate the "Add New Product" form
+      toast({
+          title: "Product Scanned!",
+          description: `${product.productName} details are ready.`
+      })
+      setIsOpen(false);
+      router.push('/admin/products/new');
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -70,9 +117,20 @@ export function BarcodeScanner() {
             Center the product's barcode inside the frame to scan it.
           </DialogDescription>
         </DialogHeader>
-        <div className="my-4 flex aspect-video w-full items-center justify-center rounded-lg bg-secondary/50">
-          <Camera className="h-16 w-16 text-muted-foreground" />
+        
+        <div className="my-4 flex aspect-video w-full items-center justify-center rounded-lg bg-secondary/50 overflow-hidden">
+          <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
+          {hasCameraPermission === false && (
+            <Alert variant="destructive" className="m-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Camera Access Required</AlertTitle>
+                <AlertDescription>
+                    Please allow camera access to use this feature.
+                </AlertDescription>
+            </Alert>
+          )}
         </div>
+       
         {loading && (
           <div className="flex items-center justify-center gap-2">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -103,20 +161,19 @@ export function BarcodeScanner() {
                     <p className="mt-2 text-lg font-bold text-primary">${product.price.toFixed(2)}</p>
                 </div>
             </div>
-            <Button className="w-full gap-2 bg-accent hover:bg-accent/80" onClick={handleAddToCart}>
+            <Button className="w-full gap-2 bg-accent hover:bg-accent/80" onClick={handleAddProduct}>
                 <PlusCircle className="h-4 w-4" />
-                Add to Cart
+                Add New Product
             </Button>
           </div>
         )}
-        <DialogFooter>
-          {!product && !loading && (
-             <Button className="w-full" onClick={handleScan}>
-                <Camera className="mr-2 h-4 w-4" />
-                Simulate Scan
-             </Button>
-          )}
-        </DialogFooter>
+
+        {(!product && hasCameraPermission === null && !loading) && (
+            <div className='text-center p-4 text-muted-foreground'>
+                <p>Could not find a barcode.</p>
+            </div>
+        )}
+
       </DialogContent>
     </Dialog>
   );

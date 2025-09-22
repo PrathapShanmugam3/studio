@@ -98,9 +98,11 @@ export function Cart() {
                 <span>Cash on Delivery</span>
               </div>
               <form action={handleCheckout} className="w-full">
-                <Button type="submit" className="w-full bg-accent hover:bg-accent/90">
-                  Proceed to Checkout
-                </Button>
+                <SheetClose asChild>
+                  <Button type="submit" className="w-full bg-accent hover:bg-accent/90">
+                    Proceed to Checkout
+                  </Button>
+                </SheetClose>
               </form>
             </div>
           </SheetFooter>
