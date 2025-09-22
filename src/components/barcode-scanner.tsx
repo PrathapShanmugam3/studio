@@ -29,8 +29,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const [hasPermission, setHasPermission] = useState<boolean | undefined>(undefined);
   const { toast } = useToast();
 
-  const codeReader = new BrowserMultiFormatReader();
-
   const processBarcode = useCallback(async (barcode: string) => {
     if (status !== 'scanning') return;
 
@@ -61,36 +59,52 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   }, [onScan, toast, status]);
 
   useEffect(() => {
-    let controls: any | undefined;
+    const codeReader = new BrowserMultiFormatReader();
+    let controls: any;
+    let isMounted = true;
 
     const startScanner = async () => {
-      if (!videoRef.current) return;
+      if (!videoRef.current || !isMounted) return;
     
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        if (!isMounted) {
+            stream.getTracks().forEach(track => track.stop());
+            return;
+        }
         setHasPermission(true);
     
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          controls = await codeReader.decodeFromVideoElementContinuously(videoRef.current, (result: Result | undefined, err: Exception | undefined) => {
-            if (result) {
-              processBarcode(result.getText());
+          // Ensure video is playing before attempting to decode
+          videoRef.current.onloadedmetadata = () => {
+            if (isMounted) {
+              controls = codeReader.decodeContinuously(videoRef.current!, (result: Result | undefined, err: Exception | undefined) => {
+                if (!isMounted) return;
+                if (result) {
+                  processBarcode(result.getText());
+                }
+                if (err && !(err instanceof NotFoundException)) {
+                  console.error('ZXing continuous decode error:', err);
+                }
+              });
             }
-            if (err && !(err instanceof NotFoundException)) {
-              console.error(err);
-            }
-          });
+          };
+          videoRef.current.play();
         }
       } catch (error) {
-        console.error('Error accessing camera:', error);
-        setHasPermission(false);
-        setStatus('permission_denied');
+        if (isMounted) {
+            console.error('Error accessing camera:', error);
+            setHasPermission(false);
+            setStatus('permission_denied');
+        }
       }
     };
 
     startScanner();
 
     return () => {
+        isMounted = false;
         if (controls) {
             controls.stop();
         }
