@@ -117,7 +117,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
                 <AlertTitle>Camera Access Required</AlertTitle>
                 <AlertDescription>
                     Please allow camera access to use this feature.
-                </Description>
+                </AlertDescription>
             </Alert>
         )}
         
