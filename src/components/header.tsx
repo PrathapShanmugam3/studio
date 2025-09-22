@@ -17,7 +17,7 @@ export function Header() {
           <Link href="/products" className="flex items-center gap-2">
             <Leaf className="h-7 w-7 text-primary" />
             <span className="font-headline text-2xl font-bold text-primary">
-              EcoCart
+              Thirumalai Maligai
             </span>
           </Link>
           <nav className="flex items-center gap-4">

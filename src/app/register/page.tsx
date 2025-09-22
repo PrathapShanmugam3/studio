@@ -21,7 +21,7 @@ export default function RegisterPage() {
             <div className="inline-flex items-center justify-center gap-2">
                 <Leaf className="h-8 w-8 text-primary" />
                 <h1 className="font-headline text-3xl font-bold text-primary">
-                EcoCart
+                Thirumalai Maligai
                 </h1>
             </div>
           <CardTitle className="text-2xl font-bold">Create an Account</CardTitle>

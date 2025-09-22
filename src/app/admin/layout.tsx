@@ -23,7 +23,7 @@ const AdminSidebar = () => {
                     <Leaf className="h-7 w-7 text-primary" />
                 </Link>
             </Button>
-            <h1 className="font-headline text-xl font-bold text-primary">EcoCart Admin</h1>
+            <h1 className="font-headline text-xl font-bold text-primary">Thirumalai Maligai Admin</h1>
         </div>
       </SidebarHeader>
       <SidebarContent>
@@ -61,7 +61,7 @@ export default function AdminLayout({
         <SidebarInset className="bg-background">
             <header className="flex h-14 items-center gap-4 border-b bg-card px-6 md:hidden">
                 <SidebarTrigger />
-                <h1 className="font-headline text-lg font-semibold text-primary">EcoCart Admin</h1>
+                <h1 className="font-headline text-lg font-semibold text-primary">Thirumalai Maligai Admin</h1>
             </header>
             <main className="flex-1 p-4 md:p-6">{children}</main>
         </SidebarInset>

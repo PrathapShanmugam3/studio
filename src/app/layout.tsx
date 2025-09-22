@@ -3,7 +3,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
-  title: 'EcoCart',
+  title: 'Thirumalai Maligai',
   description: 'A comprehensive grocery e-commerce app.',
 };
 
