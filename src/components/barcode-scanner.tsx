@@ -31,14 +31,13 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       if (product?.productName && !['not found', 'product not found'].includes(product.productName.toLowerCase())) {
         product.imageUrl = product.imageUrl || `https://picsum.photos/seed/${product.productId || barcodeText}/400/400`;
         onScan(product);
-        onClose(); // Close after successful scan
+        onClose();
       } else {
         toast({
           variant: 'destructive',
           title: 'Product Not Found',
           description: 'No product could be found for the scanned barcode.',
         });
-        // Allow scanning again if product not found
         isProcessingRef.current = false;
         setStatus('scanning');
       }
@@ -49,7 +48,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         title: 'Lookup Failed',
         description: err?.message || 'Failed to lookup barcode. Try again.',
       });
-      // Allow scanning again on error
       isProcessingRef.current = false;
       setStatus('scanning');
     }
@@ -61,66 +59,42 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     let controls: any;
 
     const startScanner = async () => {
-        if (!videoRef.current) return;
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-            if (isMounted && videoRef.current) {
-                videoRef.current.srcObject = stream;
-                videoRef.current.setAttribute('playsinline', 'true'); // Required for iOS
-                
-                // Wait for the video to be ready to play
-                videoRef.current.onloadedmetadata = async () => {
-                    if (isMounted && videoRef.current) {
-                      try {
-                        await videoRef.current.play();
-                        controls = await codeReader.decodeFromVideoDevice(undefined, videoRef.current, (result: Result | undefined, error: Exception | undefined) => {
-                            if (!isMounted) return;
-                            if (result && !isProcessingRef.current) {
-                                processBarcode(result.getText());
-                            }
-                            if (error && !(error instanceof NotFoundException)) {
-                                console.error('ZXing decode error:', error);
-                                if (isMounted) {
-                                  setErrorMessage('Error during scanning. Please check console.');
-                                  setStatus('error');
-                                }
-                            }
-                        });
-                      } catch(playError) {
-                        console.error("Error playing video:", playError);
-                        if (isMounted) {
-                          setStatus('permission_denied');
-                          setErrorMessage('Could not play video stream.');
-                        }
-                      }
-                    }
-                };
+      if (!videoRef.current) return;
+      try {
+        // Use decodeFromVideoDevice which handles stream setup
+        controls = await codeReader.decodeFromVideoDevice(undefined, videoRef.current, (result: Result | undefined, error: Exception | undefined) => {
+            if (!isMounted) return;
+            if (result && !isProcessingRef.current) {
+                processBarcode(result.getText());
             }
-        } catch (err: any) {
-            console.error('Camera initialization error', err);
-            if (isMounted) {
-                setStatus('permission_denied');
-                setErrorMessage(
-                    err?.name === 'NotAllowedError'
-                    ? 'Camera permission denied. Please allow camera access in your browser.'
-                    : err?.message || 'Could not access camera. It might be in use by another app.'
-                );
+            if (error && !(error instanceof NotFoundException)) {
+                console.error('ZXing decode error:', error);
+                if (isMounted) {
+                  setErrorMessage('Error during scanning. Please check console.');
+                  setStatus('error');
+                }
             }
+        });
+      } catch (err: any) {
+        console.error('Camera initialization error', err);
+        if (isMounted) {
+          setStatus('permission_denied');
+          setErrorMessage(
+            err?.name === 'NotAllowedError'
+              ? 'Camera permission denied. Please allow camera access in your browser.'
+              : err?.message || 'Could not access camera. It might be in use by another app.'
+          );
         }
+      }
     };
 
     startScanner();
 
     return () => {
-        isMounted = false;
-        if (controls) {
-            controls.stop();
-        }
-        if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
-            stream.getTracks().forEach(track => track.stop());
-            videoRef.current.srcObject = null;
-        }
+      isMounted = false;
+      if (controls) {
+        controls.stop();
+      }
     };
   }, [processBarcode]);
 
