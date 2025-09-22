@@ -11,7 +11,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Package, Leaf, UserCircle, LogOut } from "lucide-react"
+import { LayoutDashboard, Package, Leaf, UserCircle, LogOut, Barcode } from "lucide-react"
 import Link from "next/link"
 import {
     DropdownMenu,
@@ -51,6 +51,14 @@ const AdminSidebar = () => {
               <Link href="/admin/products">
                 <Package />
                 Products
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild>
+              <Link href="/admin/scan">
+                <Barcode />
+                Scan Barcode
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

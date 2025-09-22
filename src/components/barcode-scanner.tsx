@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { Barcode, Loader2, AlertCircle, X, PlusCircle } from 'lucide-react';
+import { Loader2, AlertCircle, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -10,16 +10,14 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { barcodeProductLookup, type BarcodeProductLookupOutput } from '@/ai/flows/barcode-product-lookup';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 
-
 export function BarcodeScanner() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [product, setProduct] = useState<BarcodeProductLookupOutput | null>(null);
@@ -28,11 +26,9 @@ export function BarcodeScanner() {
   const { toast } = useToast();
   const router = useRouter();
 
-
   useEffect(() => {
     let stream: MediaStream | null = null;
     const getCameraPermission = async () => {
-      if (!isOpen) return;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         setHasCameraPermission(true);
@@ -40,10 +36,12 @@ export function BarcodeScanner() {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
+        
         // Barcode detection logic would go here. For now, we simulate it.
         setTimeout(() => {
           handleScan();
         }, 3000); // Simulate scan after 3 seconds
+
       } catch (error) {
         console.error('Error accessing camera:', error);
         setHasCameraPermission(false);
@@ -55,20 +53,14 @@ export function BarcodeScanner() {
       }
     };
 
-    if (isOpen) {
-        setProduct(null);
-        setError(null);
-        setLoading(false);
-        getCameraPermission();
-    }
-    
+    getCameraPermission();
 
     return () => {
         if (stream) {
             stream.getTracks().forEach(track => track.stop());
         }
     }
-  }, [isOpen]);
+  }, []);
 
   const handleScan = async () => {
     setLoading(true);
@@ -82,7 +74,7 @@ export function BarcodeScanner() {
         stream.getTracks().forEach(track => track.stop());
         videoRef.current.srcObject = null;
       }
-      setHasCameraPermission(null);
+      setHasCameraPermission(null); // Hide video feed
     } catch (e) {
       setError('Failed to look up product. Please try again.');
       console.error(e);
@@ -98,18 +90,17 @@ export function BarcodeScanner() {
           title: "Product Scanned!",
           description: `${product.productName} details are ready.`
       })
-      setIsOpen(false);
       router.push('/admin/products/new');
   }
 
+  const handleClose = () => {
+    setIsOpen(false);
+    // Give dialog time to close before navigating
+    setTimeout(() => router.push('/admin/products'), 150);
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
-          <Barcode className="h-5 w-5" />
-          Scan Barcode
-        </Button>
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="font-headline">Scan Product Barcode</DialogTitle>
@@ -118,9 +109,13 @@ export function BarcodeScanner() {
           </DialogDescription>
         </DialogHeader>
         
-        <div className="my-4 flex aspect-video w-full items-center justify-center rounded-lg bg-secondary/50 overflow-hidden">
-          <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
-          {hasCameraPermission === false && (
+        {hasCameraPermission && (
+          <div className="my-4 flex aspect-video w-full items-center justify-center rounded-lg bg-secondary/50 overflow-hidden">
+            <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
+          </div>
+        )}
+       
+        {hasCameraPermission === false && (
             <Alert variant="destructive" className="m-4">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Camera Access Required</AlertTitle>
@@ -128,9 +123,8 @@ export function BarcodeScanner() {
                     Please allow camera access to use this feature.
                 </AlertDescription>
             </Alert>
-          )}
-        </div>
-       
+        )}
+        
         {loading && (
           <div className="flex items-center justify-center gap-2">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -173,7 +167,6 @@ export function BarcodeScanner() {
                 <p>Could not find a barcode.</p>
             </div>
         )}
-
       </DialogContent>
     </Dialog>
   );

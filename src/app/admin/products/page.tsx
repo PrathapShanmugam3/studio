@@ -27,7 +27,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { deleteProduct } from '@/lib/actions';
-import { BarcodeScanner } from '@/components/barcode-scanner';
 
 function DeleteProductForm({ productId }: { productId: string }) {
     return (
@@ -53,7 +52,6 @@ export default function ProductsAdminPage() {
             </CardDescription>
           </div>
           <div className='flex items-center gap-2'>
-            <BarcodeScanner />
             <Button asChild size="sm" className="gap-1">
               <Link href="/admin/products/new">
                 <PlusCircle className="h-3.5 w-3.5" />
