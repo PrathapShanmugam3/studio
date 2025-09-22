@@ -14,7 +14,7 @@ import { Button } from './ui/button';
 import type { BarcodeProductLookupOutput } from '@/ai/flows/barcode-product-lookup';
 import { barcodeProductLookup } from '@/ai/flows/barcode-product-lookup';
 import { Loader2, CameraOff } from 'lucide-react';
-import { BrowserMultiFormatReader, NotFoundException, Result, Exception, IScannerControls } from '@zxing/library';
+import { BrowserMultiFormatReader, NotFoundException, Result, Exception } from '@zxing/library';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
@@ -61,7 +61,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   }, [onScan, toast, status]);
 
   useEffect(() => {
-    let controls: IScannerControls | undefined;
+    let controls: any | undefined;
 
     const startScanner = async () => {
       if (!videoRef.current) return;
@@ -72,7 +72,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          controls = await codeReader.decodeFromVideoElementContinuously(videoRef.current, (result, err) => {
+          controls = await codeReader.decodeFromVideoElementContinuously(videoRef.current, (result: Result | undefined, err: Exception | undefined) => {
             if (result) {
               processBarcode(result.getText());
             }
