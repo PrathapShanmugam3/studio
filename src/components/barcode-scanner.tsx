@@ -37,6 +37,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     setTimeout(() => {
         setStatus('scanning');
     }, 1500);
+    // Allow the same barcode to be scanned again after 5 seconds
     setTimeout(() => {
         if (product.productId) {
             scannedBarcodes.current.delete(product.productId);
@@ -64,6 +65,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       try {
           const result = await barcodeProductLookup({ barcode });
           if (result && result.productName && result.productName.toLowerCase() !== 'not found' && result.productName.trim() !== '') {
+              // Use a consistent placeholder image based on the product ID or barcode
               result.imageUrl = `https://picsum.photos/seed/${result.productId || barcode}/400/400`;
               handleProductFound(result);
           } else {
@@ -82,11 +84,13 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       setHasCameraPermission(true);
       videoRef.current.srcObject = stream;
 
+      // Start decoding from the video stream.
       await codeReaderRef.current.decodeFromStream(stream, videoRef.current, (result, err) => {
         if (result && status === 'scanning') {
           lookupBarcode(result.getText());
         }
         if (err && !(err instanceof NotFoundException)) {
+            // Log other errors but don't necessarily stop scanning
             console.error('ZXing detection error:', err);
         }
       });
@@ -95,11 +99,13 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       console.error('Camera access error:', error);
       setHasCameraPermission(false);
       setStatus('error');
-      let friendlyMessage = 'Camera access was denied. Please grant permission in your browser settings.';
-      if (error instanceof DOMException && error.name === 'NotAllowedError') {
-        friendlyMessage = 'Camera permission was denied. You need to allow camera access to scan barcodes.';
-      } else if (error instanceof DOMException && error.name === 'NotFoundError') {
-        friendlyMessage = 'No camera found. Please connect a camera to use this feature.';
+      let friendlyMessage = 'Could not access the camera. Please check permissions.';
+      if (error instanceof DOMException) {
+          if (error.name === 'NotAllowedError') {
+              friendlyMessage = 'Camera permission was denied. You need to allow camera access to scan barcodes.';
+          } else if (error.name === 'NotFoundError') {
+              friendlyMessage = 'No camera found. Please connect a camera to use this feature.';
+          }
       }
       setErrorMessage(friendlyMessage);
       toast({
@@ -107,6 +113,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         title: 'Camera Error',
         description: friendlyMessage,
       });
+      // Close the dialog if we can't get camera permission
       onClose();
     }
   }, [lookupBarcode, onClose, toast, status]);
@@ -114,6 +121,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   useEffect(() => {
     startScanning();
     return () => {
+      // Clean up resources when the component unmounts
       codeReaderRef.current.reset();
       if (videoRef.current && videoRef.current.srcObject) {
         (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
@@ -146,6 +154,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           </div>
         );
       case 'scanning':
+         // A visual guide for the user
          return (
              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                  <div className="w-[90%] h-1/2 border-y-4 border-dashed border-white/50 rounded-lg" />
@@ -167,6 +176,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         </DialogHeader>
         
         <div className="my-4 flex aspect-video w-full items-center justify-center rounded-lg bg-secondary overflow-hidden relative">
+            {/* The video element is crucial and should always be rendered */}
             <video ref={videoRef} className="w-full h-full object-cover" />
             <StatusOverlay />
         </div>
