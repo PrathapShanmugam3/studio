@@ -23,6 +23,7 @@ import {
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { orders, products, salesData } from '@/lib/data';
 import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
 
 const totalRevenue = orders.reduce((acc, order) => acc + order.total, 0);
 const totalOrders = orders.length;
@@ -124,7 +125,7 @@ export default function DashboardPage() {
                     <TableRow key={order.id}>
                         <TableCell>
                             <div className="font-medium">{order.customerName}</div>
-                            <div className="text-sm text-muted-foreground">{new Date(order.date).toLocaleDateString()}</div>
+                            <div className="text-sm text-muted-foreground">{format(new Date(order.date), 'MM/dd/yyyy')}</div>
                         </TableCell>
                         <TableCell>
                             <Badge variant={order.status === 'Completed' ? 'default' : 'secondary'} className={order.status === 'Completed' ? 'bg-primary' : ''}>

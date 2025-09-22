@@ -1,4 +1,5 @@
 import type { Product, Order } from './types';
+import { format, subDays } from 'date-fns';
 
 export const products: Product[] = [
   { id: 'prod1', name: 'Organic Bananas', description: 'A bundle of fresh organic bananas.', price: 1.25, stock: 150, image: 'https://picsum.photos/seed/prod1/400/400' },
@@ -53,11 +54,11 @@ export const orders: Order[] = [
 ];
 
 export const salesData = [
-  { date: new Date(new Date().setDate(new Date().getDate() - 6)).toLocaleDateString(), sales: 4000 },
-  { date: new Date(new Date().setDate(new Date().getDate() - 5)).toLocaleDateString(), sales: 3000 },
-  { date: new Date(new Date().setDate(new Date().getDate() - 4)).toLocaleDateString(), sales: 2000 },
-  { date: new Date(new Date().setDate(new Date().getDate() - 3)).toLocaleDateString(), sales: 2780 },
-  { date: new Date(new Date().setDate(new Date().getDate() - 2)).toLocaleDateString(), sales: 1890 },
-  { date: new Date(new Date().setDate(new Date().getDate() - 1)).toLocaleDateString(), sales: 2390 },
-  { date: new Date().toLocaleDateString(), sales: 3490 },
+  { date: format(subDays(new Date(), 6), 'MM/dd/yy'), sales: 4000 },
+  { date: format(subDays(new Date(), 5), 'MM/dd/yy'), sales: 3000 },
+  { date: format(subDays(new Date(), 4), 'MM/dd/yy'), sales: 2000 },
+  { date: format(subDays(new Date(), 3), 'MM/dd/yy'), sales: 2780 },
+  { date: format(subDays(new Date(), 2), 'MM/dd/yy'), sales: 1890 },
+  { date: format(subDays(new Date(), 1), 'MM/dd/yy'), sales: 2390 },
+  { date: format(new Date(), 'MM/dd/yy'), sales: 3490 },
 ];
