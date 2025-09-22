@@ -17,14 +17,13 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [status, setStatus] = useState<'scanning' | 'loading' | 'permission_denied' | 'error'>('scanning');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isMounted, setIsMounted] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const isProcessingRef = useRef(false);
 
   const { toast } = useToast();
 
   const processBarcode = useCallback(async (barcodeText: string) => {
-    if (isProcessing) return;
-    setIsProcessing(true);
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
     setStatus('loading');
 
     try {
@@ -32,12 +31,16 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       if (product?.productName && !['not found', 'product not found'].includes(product.productName.toLowerCase())) {
         product.imageUrl = product.imageUrl || `https://picsum.photos/seed/${product.productId || barcodeText}/400/400`;
         onScan(product);
+        onClose(); // Close after successful scan
       } else {
         toast({
           variant: 'destructive',
           title: 'Product Not Found',
           description: 'No product could be found for the scanned barcode.',
         });
+        // Allow scanning again if product not found
+        isProcessingRef.current = false;
+        setStatus('scanning');
       }
     } catch (err: any) {
       console.error('Lookup error', err);
@@ -46,61 +49,70 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         title: 'Lookup Failed',
         description: err?.message || 'Failed to lookup barcode. Try again.',
       });
-    } finally {
-        // Add a small delay before allowing the next scan to prevent rapid-fire duplicates
-        setTimeout(() => {
-            if (isMounted) {
-                setStatus('scanning');
-                setIsProcessing(false);
-            }
-        }, 1000);
+      // Allow scanning again on error
+      isProcessingRef.current = false;
+      setStatus('scanning');
     }
-  }, [onScan, toast, isProcessing, isMounted]);
+  }, [onScan, onClose, toast]);
 
   useEffect(() => {
-    setIsMounted(true);
+    let isMounted = true;
     const codeReader = new BrowserMultiFormatReader();
     let controls: any;
 
     const startScanner = async () => {
-        if (!isMounted || !videoRef.current) return;
+        if (!videoRef.current) return;
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-            if (videoRef.current) {
+            if (isMounted && videoRef.current) {
                 videoRef.current.srcObject = stream;
                 videoRef.current.setAttribute('playsinline', 'true'); // Required for iOS
-                await videoRef.current.play();
-
-                controls = await codeReader.decodeFromVideoDevice(undefined, videoRef.current, (result: Result | undefined, error: Exception | undefined) => {
-                    if (!isMounted) return;
-                    if (result && status === 'scanning' && !isProcessing) {
-                        processBarcode(result.getText());
-                    }
-                    if (error && !(error instanceof NotFoundException)) {
-                        console.error('ZXing decode error:', error);
+                
+                // Wait for the video to be ready to play
+                videoRef.current.onloadedmetadata = async () => {
+                    if (isMounted && videoRef.current) {
+                      try {
+                        await videoRef.current.play();
+                        controls = await codeReader.decodeFromVideoDevice(undefined, videoRef.current, (result: Result | undefined, error: Exception | undefined) => {
+                            if (!isMounted) return;
+                            if (result && !isProcessingRef.current) {
+                                processBarcode(result.getText());
+                            }
+                            if (error && !(error instanceof NotFoundException)) {
+                                console.error('ZXing decode error:', error);
+                                if (isMounted) {
+                                  setErrorMessage('Error during scanning. Please check console.');
+                                  setStatus('error');
+                                }
+                            }
+                        });
+                      } catch(playError) {
+                        console.error("Error playing video:", playError);
                         if (isMounted) {
-                          setErrorMessage('Error during scanning. Please check console.');
-                          setStatus('error');
+                          setStatus('permission_denied');
+                          setErrorMessage('Could not play video stream.');
                         }
+                      }
                     }
-                });
+                };
             }
         } catch (err: any) {
             console.error('Camera initialization error', err);
-            if (!isMounted) return;
-            setStatus('permission_denied');
-            setErrorMessage(
-                err?.name === 'NotAllowedError'
-                ? 'Camera permission denied. Please allow camera access in your browser.'
-                : err?.message || 'Could not access camera. It might be in use by another app.'
-            );
+            if (isMounted) {
+                setStatus('permission_denied');
+                setErrorMessage(
+                    err?.name === 'NotAllowedError'
+                    ? 'Camera permission denied. Please allow camera access in your browser.'
+                    : err?.message || 'Could not access camera. It might be in use by another app.'
+                );
+            }
         }
     };
 
     startScanner();
 
     return () => {
-        setIsMounted(false);
+        isMounted = false;
         if (controls) {
             controls.stop();
         }
@@ -110,7 +122,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             videoRef.current.srcObject = null;
         }
     };
-  }, [processBarcode, status, isProcessing]);
+  }, [processBarcode]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
@@ -153,7 +165,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           </div>
         )}
 
-         {status === 'scanning' && !isProcessing && (
+         {status === 'scanning' && !isProcessingRef.current && (
             <div className="mt-3 flex items-center justify-center text-sm text-green-600">
                 <p>Ready to scan</p>
             </div>
@@ -167,7 +179,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
         <div className="flex justify-end mt-4">
           <Button variant="outline" onClick={onClose}>
-            Done Scanning
+            Cancel
           </Button>
         </div>
       </div>
