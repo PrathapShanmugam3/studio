@@ -31,9 +31,7 @@ export function BarcodeScanner() {
     try {
       const result = await barcodeProductLookup({ barcode: '123456789012' });
       // The AI can sometimes return an invalid image URL, so we replace it.
-      if (!result.imageUrl || !result.imageUrl.startsWith('http')) {
-        result.imageUrl = 'https://picsum.photos/seed/ai-product/400/400';
-      }
+      result.imageUrl = `https://picsum.photos/seed/${result.productId || 'ai-product'}/400/400`;
       setProduct(result);
     } catch (e) {
       setError('Failed to look up product. Please try again.');
@@ -69,7 +67,7 @@ export function BarcodeScanner() {
         <DialogHeader>
           <DialogTitle className="font-headline">Scan Product Barcode</DialogTitle>
           <DialogDescription>
-            Center the product&apos;s barcode inside the frame to scan it.
+            Center the product's barcode inside the frame to scan it.
           </DialogDescription>
         </DialogHeader>
         <div className="my-4 flex aspect-video w-full items-center justify-center rounded-lg bg-secondary/50">
