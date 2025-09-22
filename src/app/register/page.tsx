@@ -11,26 +11,30 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { login } from '@/lib/actions';
+import { register } from '@/lib/actions';
 
-export default function LoginPage() {
+export default function RegisterPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="mx-auto w-full max-w-sm">
         <CardHeader className="space-y-2 text-center">
-          <div className="inline-flex items-center justify-center gap-2">
-            <Leaf className="h-8 w-8 text-primary" />
-            <h1 className="font-headline text-3xl font-bold text-primary">
-              EcoCart
-            </h1>
-          </div>
-          <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
+            <div className="inline-flex items-center justify-center gap-2">
+                <Leaf className="h-8 w-8 text-primary" />
+                <h1 className="font-headline text-3xl font-bold text-primary">
+                EcoCart
+                </h1>
+            </div>
+          <CardTitle className="text-2xl font-bold">Create an Account</CardTitle>
           <CardDescription>
-            Enter your email below to login to your account
+            Enter your information to create a new account
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={login} className="grid gap-4">
+          <form action={register} className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Name</Label>
+              <Input id="name" name="name" placeholder="John Doe" required />
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -39,23 +43,20 @@ export default function LoginPage() {
                 name="email"
                 placeholder="m@example.com"
                 required
-                defaultValue="customer@example.com"
               />
             </div>
             <div className="grid gap-2">
-              <div className="flex items-center">
-                <Label htmlFor="password">Password</Label>
-              </div>
-              <Input id="password" type="password" name="password" required defaultValue="password" />
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" name="password" type="password" required />
             </div>
             <Button type="submit" className="w-full bg-accent hover:bg-accent/90">
-              Login
+              Create Account
             </Button>
           </form>
           <div className="mt-4 text-center text-sm">
-            Don&apos;t have an account?{' '}
-            <Link href="/register" className="underline">
-              Sign up
+            Already have an account?{' '}
+            <Link href="/" className="underline">
+              Sign in
             </Link>
           </div>
         </CardContent>

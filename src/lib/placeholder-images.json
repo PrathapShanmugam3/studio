@@ -1,3 +1,76 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "prod1",
+      "description": "A bundle of fresh organic bananas.",
+      "imageUrl": "https://picsum.photos/seed/prod1/400/400",
+      "imageHint": "bananas"
+    },
+    {
+      "id": "prod2",
+      "description": "Crisp and juicy organic red apples.",
+      "imageUrl": "https://picsum.photos/seed/prod2/400/400",
+      "imageHint": "apples"
+    },
+    {
+      "id": "prod3",
+      "description": "A carton of fresh, free-range eggs.",
+      "imageUrl": "https://picsum.photos/seed/prod3/400/400",
+      "imageHint": "eggs"
+    },
+    {
+      "id": "prod4",
+      "description": "A loaf of freshly baked whole wheat bread.",
+      "imageUrl": "https://picsum.photos/seed/prod4/400/400",
+      "imageHint": "bread"
+    },
+    {
+      "id": "prod5",
+      "description": "A gallon of fresh organic milk.",
+      "imageUrl": "https://picsum.photos/seed/prod5/400/400",
+      "imageHint": "milk"
+    },
+    {
+      "id": "prod6",
+      "description": "A block of sharp cheddar cheese.",
+      "imageUrl": "https://picsum.photos/seed/prod6/400/400",
+      "imageHint": "cheese"
+    },
+    {
+      "id": "prod7",
+      "description": "Fresh, leafy green spinach.",
+      "imageUrl": "https://picsum.photos/seed/prod7/400/400",
+      "imageHint": "spinach"
+    },
+    {
+      "id": "prod8",
+      "description": "Ripe and juicy vine tomatoes.",
+      "imageUrl": "https://picsum.photos/seed/prod8/400/400",
+      "imageHint": "tomatoes"
+    },
+    {
+      "id": "prod9",
+      "description": "A bag of crunchy organic carrots.",
+      "imageUrl": "https://picsum.photos/seed/prod9/400/400",
+      "imageHint": "carrots"
+    },
+    {
+      "id": "prod10",
+      "description": "A can of organic black beans.",
+      "imageUrl": "https://picsum.photos/seed/prod10/400/400",
+      "imageHint": "beans"
+    },
+    {
+      "id": "prod11",
+      "description": "A box of whole grain pasta.",
+      "imageUrl": "https://picsum.photos/seed/prod11/400/400",
+      "imageHint": "pasta"
+    },
+    {
+      "id": "prod12",
+      "description": "A jar of organic tomato sauce.",
+      "imageUrl": "https://picsum.photos/seed/prod12/400/400",
+      "imageHint": "sauce"
+    }
+  ]
 }
