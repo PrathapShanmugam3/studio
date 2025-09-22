@@ -1,5 +1,5 @@
 import { products } from '@/lib/data';
-import { ProductForm } from '../components/product-form';
+import { ProductForm } from '@/app/admin/products/components/product-form';
 
 export default function EditProductPage({ params }: { params: { id: string } }) {
   const product = products.find(p => p.id === params.id);
