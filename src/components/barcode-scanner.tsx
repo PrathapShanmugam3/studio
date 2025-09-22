@@ -48,7 +48,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
   const lookupBarcode = useCallback(
     async (barcode: string) => {
-      if (status !== 'scanning') return;
+      if (statusRef.current !== 'scanning') return;
 
       setStatus('loading');
 
@@ -58,83 +58,89 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           result.imageUrl = `https://picsum.photos/seed/${result.productId || barcode}/400/400`;
           handleProductFound(result);
         } else {
-          handleProductError('Product not found.');
+          handleProductError('Product not found for this barcode.');
         }
       } catch (e: any) {
-        handleProductError(e.message || 'Lookup failed.');
+        handleProductError(e.message || 'Product lookup failed.');
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [status, onScan]
+    [] // Dependencies removed to prevent re-creation of the function
   );
+  
+  const statusRef = useRef(status);
+  useEffect(() => {
+      statusRef.current = status;
+  }, [status]);
   
   useEffect(() => {
     let stream: MediaStream | null = null;
     const codeReader = codeReaderRef.current;
 
     const startScanning = async () => {
-      if (!videoRef.current) return;
-      setStatus('scanning');
+        if (!videoRef.current) {
+            return;
+        }
 
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
-        });
-        setHasCameraPermission(true);
-        videoRef.current.srcObject = stream;
-        
-        await videoRef.current.play();
+        setStatus('scanning');
+        try {
+            // Get camera permission and stream
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment' },
+            });
+            setHasCameraPermission(true);
 
-        codeReader.decodeFromVideoDevice(
-            undefined,
-            videoRef.current,
-            (result, error) => {
-              if (result) {
-                // Prevent multiple scans of the same code in quick succession
-                if (statusRef.current === 'scanning') {
-                  lookupBarcode(result.getText());
-                }
-              }
-              if (error && !(error instanceof NotFoundException)) {
-                console.error('ZXing decode error:', error);
-                handleProductError('Barcode decoding failed.');
-              }
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream;
+              await videoRef.current.play();
             }
-        );
 
-      } catch (err: any) {
-        console.error('Camera error:', err);
-        setHasCameraPermission(false);
-        setStatus('error');
-        const message = err.name === 'NotAllowedError' ? 'Camera permission denied. Please enable it in your browser settings.' : 'Could not access camera.';
-        setErrorMessage(message);
-        toast({
-            variant: 'destructive',
-            title: 'Camera Error',
-            description: message,
-        });
-        onClose();
-      }
+            // Start decoding from the video device
+            await codeReader.decodeFromVideoDevice(undefined, videoRef.current, (result, error) => {
+                if (result) {
+                    // A barcode has been found
+                    if (statusRef.current === 'scanning') {
+                        lookupBarcode(result.getText());
+                    }
+                }
+                if (error && !(error instanceof NotFoundException)) {
+                    // An error occurred during decoding, but it's not "not found"
+                    console.error('ZXing decode error:', error);
+                    // Optionally, handle this error in the UI
+                }
+            });
+
+        } catch (err: any) {
+            console.error('Camera or scanning error:', err);
+            setHasCameraPermission(false);
+            setStatus('error');
+            let message = 'Could not access camera.';
+            if (err.name === 'NotAllowedError') {
+                message = 'Camera permission denied. Please enable it in your browser settings.';
+            } else if (err.name === 'NotSupportedError' || err.message.includes('not supported')) {
+                message = 'Barcode Detector API is not supported by this browser.';
+            }
+            setErrorMessage(message);
+            toast({
+                variant: 'destructive',
+                title: 'Scanner Error',
+                description: message,
+            });
+            onClose();
+        }
     };
-    
-    if(status === 'waiting') {
-        startScanning();
-    }
 
+    startScanning();
+
+    // Cleanup function to stop tracks and reset the reader
     return () => {
-      codeReader.reset();
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
+        codeReader.reset();
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, onClose, toast]);
-
-
-  const statusRef = useRef(status);
-  useEffect(() => {
-      statusRef.current = status;
-  }, [status]);
+  }, [lookupBarcode, onClose]);
 
 
   const StatusOverlay = () => {
@@ -171,7 +177,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         return (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="w-[90%] h-1/2 border-y-4 border-dashed border-white/50 rounded-lg" />
-             <div className="absolute top-2 left-2 right-2 text-white text-center bg-black/30 p-1 rounded-md text-xs">Scanner is active</div>
+             <div className="absolute top-2 left-2 right-2 text-white text-center bg-black/30 p-1 rounded-md text-xs">Point camera at a barcode</div>
           </div>
         );
       default:
@@ -192,11 +198,13 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           <StatusOverlay />
         </div>
 
-        {hasCameraPermission === false && status === 'error' && (
+        {hasCameraPermission === false && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Camera Access Denied</AlertTitle>
-            <AlertDescription>{errorMessage}</AlertDescription>
+            <AlertDescription>
+                {errorMessage || "Please enable camera permissions in your browser settings."}
+            </AlertDescription>
           </Alert>
         )}
       </DialogContent>
