@@ -34,8 +34,9 @@ const barcodeProductLookupPrompt = ai.definePrompt({
   input: {schema: BarcodeProductLookupInputSchema},
   output: {schema: BarcodeProductLookupOutputSchema},
   prompt: `You are a product identifier. Given a barcode, you will identify the product
-  and return its details in JSON format. The barcode is: {{{barcode}}}.  Make up the
-  product details if you don't know the barcode.
+  and return its details in JSON format. The barcode is: {{{barcode}}}.
+
+  Only return details for a valid, real-world barcode. If the barcode is not recognized or is a fake example, do not invent product details. Instead, indicate that the product was not found.
 
   Ensure the JSON response includes:
   - productName: The name of the product.
