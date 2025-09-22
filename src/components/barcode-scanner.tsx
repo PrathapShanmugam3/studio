@@ -38,7 +38,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     onScan(product);
     setTimeout(() => {
         setStatus('scanning');
-        scannedBarcodes.current.delete(product.productId || '');
+        scannedBarcodes.current.clear(); // Allow scanning the same code again after success
     }, 1500);
   };
 
@@ -49,20 +49,20 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     setTimeout(() => {
       setStatus('scanning');
       setErrorMessage(null);
-      scannedBarcodes.current.delete(barcode);
+      scannedBarcodes.current.delete(barcode); // Allow retrying the same failed code
     }, 2500);
   };
 
   const lookupBarcode = useCallback(
     async (barcode: string) => {
-      if (scannedBarcodes.current.has(barcode) || status !== 'scanning') return;
+      if (scannedBarcodes.current.has(barcode)) return;
 
       setStatus('loading');
       scannedBarcodes.current.add(barcode);
 
       try {
         const result = await barcodeProductLookup({ barcode });
-        if (result?.productName && result.productName.toLowerCase() !== 'not found') {
+        if (result?.productName && result.productName.toLowerCase() !== 'not found' && result.productName.toLowerCase() !== 'unknown') {
           result.imageUrl = `https://picsum.photos/seed/${result.productId || barcode}/400/400`;
           handleProductFound(result);
         } else {
@@ -72,11 +72,12 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         handleProductError(barcode, e.message || 'Lookup failed.');
       }
     },
-    [status, onScan] // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [onScan] 
   );
 
  const startCamera = useCallback(async () => {
-    if (!videoRef.current || status !== 'waiting') return;
+    if (!videoRef.current || status === 'scanning' || status === 'loading') return;
 
     setStatus('scanning');
     try {
@@ -85,15 +86,14 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
         if (videoRef.current) {
             videoRef.current.srcObject = stream;
-            // The `decodeFromVideoDevice` will internally handle play()
+            
             controlsRef.current = await codeReaderRef.current.decodeFromVideoDevice(undefined, videoRef.current, (result, error, controls) => {
-                if (result) {
+                // Ensure we only process scans when in the 'scanning' state.
+                if (result && statusRef.current === 'scanning') {
                     lookupBarcode(result.getText());
                 }
                 if (error && !(error instanceof NotFoundException)) {
                     console.error('ZXing decode error:', error);
-                    setErrorMessage("Error decoding barcode.")
-                    setStatus('error')
                 }
             });
         }
@@ -101,19 +101,22 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         console.error('Camera error:', err);
         setHasCameraPermission(false);
         setStatus('error');
-        if (err.name === 'NotAllowedError') {
-            setErrorMessage('Camera permission denied. Please enable it in your browser settings.');
-        } else {
-            setErrorMessage('Could not access camera. It may be in use by another application.');
-        }
+        const message = err.name === 'NotAllowedError' ? 'Camera permission denied. Please enable it in your browser settings.' : 'Could not access camera. It may be in use by another application.';
+        setErrorMessage(message);
         toast({
             variant: 'destructive',
             title: 'Camera Error',
-            description: errorMessage || 'Failed to start camera.',
+            description: message,
         });
         onClose();
     }
-}, [status, lookupBarcode, onClose, toast, errorMessage]);
+}, [status, lookupBarcode, onClose, toast]);
+
+  // Use a ref to get the latest status inside the scanner callback without causing re-renders.
+  const statusRef = useRef(status);
+  useEffect(() => {
+      statusRef.current = status;
+  }, [status]);
 
 
   useEffect(() => {
