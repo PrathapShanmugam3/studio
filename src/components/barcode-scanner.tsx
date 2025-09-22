@@ -76,58 +76,58 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       }
   }, [status, onScan]);
 
-  const startScanning = useCallback(async () => {
-    if (!videoRef.current) return;
-    
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      setHasCameraPermission(true);
-      videoRef.current.srcObject = stream;
-
-      // Start decoding from the video stream.
-      await codeReaderRef.current.decodeFromStream(stream, videoRef.current, (result, err) => {
-        if (result && status === 'scanning') {
-          lookupBarcode(result.getText());
-        }
-        if (err && !(err instanceof NotFoundException)) {
-            // Log other errors but don't necessarily stop scanning
-            console.error('ZXing detection error:', err);
-        }
-      });
-
-    } catch (error) {
-      console.error('Camera access error:', error);
-      setHasCameraPermission(false);
-      setStatus('error');
-      let friendlyMessage = 'Could not access the camera. Please check permissions.';
-      if (error instanceof DOMException) {
-          if (error.name === 'NotAllowedError') {
-              friendlyMessage = 'Camera permission was denied. You need to allow camera access to scan barcodes.';
-          } else if (error.name === 'NotFoundError') {
-              friendlyMessage = 'No camera found. Please connect a camera to use this feature.';
-          }
-      }
-      setErrorMessage(friendlyMessage);
-      toast({
-        variant: 'destructive',
-        title: 'Camera Error',
-        description: friendlyMessage,
-      });
-      // Close the dialog if we can't get camera permission
-      onClose();
-    }
-  }, [lookupBarcode, onClose, toast, status]);
-
   useEffect(() => {
+    const startScanning = async () => {
+      if (!videoRef.current) return;
+      
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        setHasCameraPermission(true);
+        videoRef.current.srcObject = stream;
+        
+        // Ensure the video element is playing before decoding.
+        videoRef.current.oncanplay = () => {
+            codeReaderRef.current.decodeFromStream(stream, videoRef.current, (result, err) => {
+              if (result && status === 'scanning') {
+                lookupBarcode(result.getText());
+              }
+              if (err && !(err instanceof NotFoundException)) {
+                  console.error('ZXing detection error:', err);
+              }
+            });
+        };
+
+      } catch (error) {
+        console.error('Camera access error:', error);
+        setHasCameraPermission(false);
+        setStatus('error');
+        let friendlyMessage = 'Could not access the camera. Please check permissions.';
+        if (error instanceof DOMException) {
+            if (error.name === 'NotAllowedError') {
+                friendlyMessage = 'Camera permission was denied. You need to allow camera access to scan barcodes.';
+            } else if (error.name === 'NotFoundError') {
+                friendlyMessage = 'No camera found. Please connect a camera to use this feature.';
+            }
+        }
+        setErrorMessage(friendlyMessage);
+        toast({
+          variant: 'destructive',
+          title: 'Camera Error',
+          description: friendlyMessage,
+        });
+        onClose(); // Close the dialog if we can't get camera permission
+      }
+    };
+    
     startScanning();
+
     return () => {
-      // Clean up resources when the component unmounts
       codeReaderRef.current.reset();
       if (videoRef.current && videoRef.current.srcObject) {
         (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
       }
     };
-  }, [startScanning]);
+  }, [lookupBarcode, onClose, status, toast]);
 
   const StatusOverlay = () => {
     switch (status) {
@@ -176,17 +176,16 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         </DialogHeader>
         
         <div className="my-4 flex aspect-video w-full items-center justify-center rounded-lg bg-secondary overflow-hidden relative">
-            {/* The video element is crucial and should always be rendered */}
-            <video ref={videoRef} className="w-full h-full object-cover" />
+            <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted />
             <StatusOverlay />
         </div>
        
-        {hasCameraPermission === false && errorMessage && (
+        {hasCameraPermission === false && (
             <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
+                <AlertTitle>Camera Access Denied</AlertTitle>
                 <AlertDescription>
-                    {errorMessage}
+                    Please enable camera permissions in your browser settings to use this app.
                 </AlertDescription>
             </Alert>
         )}
