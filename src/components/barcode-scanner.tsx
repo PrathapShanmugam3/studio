@@ -62,6 +62,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   useEffect(() => {
     const codeReader = codeReaderRef.current;
     let isMounted = true;
+    let controls: any = null;
 
     const startScanner = async () => {
       if (!isMounted || !videoRef.current) return;
@@ -72,8 +73,8 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             videoRef.current.srcObject = stream;
             // Ensure the video element is ready before starting to decode
             videoRef.current.onloadedmetadata = () => {
-                if (isMounted) {
-                    codeReader.decodeFromVideoElement(videoRef.current, (result: Result | undefined, error: Exception | undefined) => {
+                if (isMounted && videoRef.current) {
+                    controls = codeReader.decodeContinuouslyFromVideoElement(videoRef.current, (result: Result | undefined, error: Exception | undefined) => {
                         if (!isMounted) {
                             return;
                         }
@@ -103,7 +104,9 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
     return () => {
       isMounted = false;
-      codeReader.reset();
+      if (controls) {
+        controls.stop();
+      }
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
