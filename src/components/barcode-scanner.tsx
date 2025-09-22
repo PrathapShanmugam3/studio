@@ -14,7 +14,7 @@ import { Button } from './ui/button';
 import type { BarcodeProductLookupOutput } from '@/ai/flows/barcode-product-lookup';
 import { barcodeProductLookup } from '@/ai/flows/barcode-product-lookup';
 import { Loader2, CameraOff } from 'lucide-react';
-import { BrowserMultiFormatReader, NotFoundException, Result, Exception } from '@zxing/library';
+import { BrowserMultiFormatReader, NotFoundException, Result, Exception, IScannerControls } from '@zxing/library';
 import { useToast } from '@/hooks/use-toast';
 
 interface BarcodeScannerProps {
@@ -25,6 +25,7 @@ interface BarcodeScannerProps {
 export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const codeReaderRef = useRef(new BrowserMultiFormatReader());
+  const controlsRef = useRef<IScannerControls | null>(null);
   
   const [status, setStatus] = useState<'scanning' | 'loading' | 'permission_denied'>('scanning');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -62,22 +63,20 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   useEffect(() => {
     const codeReader = codeReaderRef.current;
     let isMounted = true;
-    let controls: any = null;
 
     const startScanner = async () => {
       if (!isMounted || !videoRef.current) return;
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        if (videoRef.current) {
+        if (videoRef.current && isMounted) {
             videoRef.current.srcObject = stream;
             // Ensure the video element is ready before starting to decode
             videoRef.current.onloadedmetadata = () => {
                 if (isMounted && videoRef.current) {
-                    controls = codeReader.decodeContinuouslyFromVideoElement(videoRef.current, (result: Result | undefined, error: Exception | undefined) => {
-                        if (!isMounted) {
-                            return;
-                        }
+                    controlsRef.current = codeReader.decodeContinuously(videoRef.current, (result: Result | undefined, error: Exception | undefined) => {
+                        if (!isMounted) return;
+
                         if (result) {
                             processBarcode(result.getText());
                         }
@@ -104,8 +103,9 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
     return () => {
       isMounted = false;
-      if (controls) {
-        controls.stop();
+      if (controlsRef.current) {
+        controlsRef.current.stop();
+        controlsRef.current = null;
       }
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
