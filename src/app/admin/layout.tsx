@@ -9,6 +9,7 @@ import {
   SidebarInset,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button";
 import { LayoutDashboard, Package, Leaf } from "lucide-react"
 import Link from "next/link"
 
