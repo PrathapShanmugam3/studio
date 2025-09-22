@@ -27,7 +27,50 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
   useEffect(() => {
     let stream: MediaStream | null = null;
-    let timeoutId: NodeJS.Timeout | null = null;
+    let detectionInterval: NodeJS.Timeout | null = null;
+
+    const startScan = async (videoElement: HTMLVideoElement, streamInstance: MediaStream) => {
+      if (!('BarcodeDetector' in window)) {
+        console.error('Barcode Detector is not supported by this browser.');
+        setError('Barcode scanning is not supported on this browser or device.');
+        // Fallback to simulation for unsupported browsers
+        setTimeout(() => handleScan('123456789012'), 3000);
+        return;
+      }
+
+      // @ts-ignore - BarcodeDetector is not in all TS lib versions yet
+      const barcodeDetector = new window.BarcodeDetector({
+        formats: [
+          'aztec',
+          'code_128',
+          'code_39',
+          'code_93',
+          'codabar',
+          'data_matrix',
+          'ean_13',
+          'ean_8',
+          'itf',
+          'pdf417',
+          'qr_code',
+          'upc_a',
+          'upc_e'
+        ],
+      });
+
+      detectionInterval = setInterval(async () => {
+        if (videoElement.readyState < 2 || loading) return;
+        try {
+          // @ts-ignore
+          const barcodes = await barcodeDetector.detect(videoElement);
+          if (barcodes.length > 0 && !loading) {
+            handleScan(barcodes[0].rawValue);
+          }
+        } catch (e) {
+          console.error('Barcode detection failed:', e);
+          setError('An error occurred during barcode detection.');
+        }
+      }, 500);
+    };
 
     const getCameraPermission = async () => {
       try {
@@ -36,13 +79,9 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          videoRef.current.play(); // Ensure video starts playing
+          startScan(videoRef.current, stream);
         }
-        
-        // Simulate barcode detection after a delay
-        timeoutId = setTimeout(() => {
-          handleScan();
-        }, 3000);
-
       } catch (error) {
         console.error('Error accessing camera:', error);
         setHasCameraPermission(false);
@@ -58,24 +97,25 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     getCameraPermission();
 
     return () => {
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-        }
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-        }
-    }
-  }, [onClose, toast]);
+      if (detectionInterval) {
+        clearInterval(detectionInterval);
+      }
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleScan = async () => {
+  const handleScan = async (barcodeValue: string) => {
+    if (loading) return; // Prevent multiple submissions
     setLoading(true);
     setError(null);
     try {
-      // In a real app, you'd use a barcode detection library here.
-      // We'll simulate it by calling the lookup with a static barcode.
-      const result = await barcodeProductLookup({ barcode: `123456789${Math.floor(Math.random() * 900) + 100}` });
+      const result = await barcodeProductLookup({ barcode: barcodeValue });
       result.imageUrl = `https://picsum.photos/seed/${result.productId || 'ai-product'}/400/400`;
       
+      // Stop camera after successful scan
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
@@ -102,6 +142,9 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         
         <div className="my-4 flex aspect-video w-full items-center justify-center rounded-lg bg-secondary/50 overflow-hidden relative">
             <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
+            <div className="absolute inset-0 border-4 border-white/50 rounded-lg pointer-events-none" style={{
+              clipPath: 'polygon(0% 0%, 0% 100%, 25% 100%, 25% 25%, 75% 25%, 75% 75%, 25% 75%, 25% 100%, 100% 100%, 100% 0%)'
+            }}></div>
             
             {loading && (
                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white">
@@ -112,7 +155,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         </div>
        
         {hasCameraPermission === false && (
-            <Alert variant="destructive" className="m-4">
+            <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Camera Access Required</AlertTitle>
                 <AlertDescription>
