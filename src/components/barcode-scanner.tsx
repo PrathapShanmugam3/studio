@@ -13,8 +13,8 @@ import {
 import { Button } from './ui/button';
 import type { BarcodeProductLookupOutput } from '@/ai/flows/barcode-product-lookup';
 import { barcodeProductLookup } from '@/ai/flows/barcode-product-lookup';
-import { Loader2, XCircle, CameraOff } from 'lucide-react';
-import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
+import { Loader2, CameraOff } from 'lucide-react';
+import { BrowserMultiFormatReader, NotFoundException, Result, Exception } from '@zxing/library';
 import { useToast } from '@/hooks/use-toast';
 
 interface BarcodeScannerProps {
@@ -26,11 +26,13 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const codeReaderRef = useRef(new BrowserMultiFormatReader());
   
-  const [status, setStatus] = useState<'scanning' | 'loading' | 'error' | 'permission'>('scanning');
+  const [status, setStatus] = useState<'scanning' | 'loading' | 'permission_denied'>('scanning');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { toast } = useToast();
 
   const processBarcode = useCallback(async (barcode: string) => {
+    if (status !== 'scanning') return;
+
     setStatus('loading');
     try {
       const product = await barcodeProductLookup({ barcode });
@@ -55,7 +57,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       });
       setStatus('scanning'); // Go back to scanning
     }
-  }, [onScan, toast]);
+  }, [onScan, toast, status]);
 
   useEffect(() => {
     const codeReader = codeReaderRef.current;
@@ -65,26 +67,30 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       if (!isMounted || !videoRef.current) return;
 
       try {
-        await codeReader.decodeFromVideoDevice(
-          null, // use default camera
-          videoRef.current,
-          (result, error, controls) => {
-            if (!isMounted) {
-                controls.stop();
-                return;
-            }
-            if (result && status === 'scanning') {
-                processBarcode(result.getText());
-            }
-            if (error && !(error instanceof NotFoundException)) {
-              console.error('ZXing decode error:', error);
-            }
-          }
-        );
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            // Ensure the video element is ready before starting to decode
+            videoRef.current.onloadedmetadata = () => {
+                if (isMounted) {
+                    codeReader.decodeFromVideoElement(videoRef.current, (result: Result | undefined, error: Exception | undefined) => {
+                        if (!isMounted) {
+                            return;
+                        }
+                        if (result) {
+                            processBarcode(result.getText());
+                        }
+                        if (error && !(error instanceof NotFoundException)) {
+                            console.error('ZXing decode error:', error);
+                        }
+                    });
+                }
+            };
+        }
       } catch (err: any) {
         if (!isMounted) return;
         console.error('Camera initialization error:', err);
-        setStatus('permission');
+        setStatus('permission_denied');
         if (err.name === 'NotAllowedError') {
           setErrorMessage('Camera permission was denied. Please grant access in your browser settings.');
         } else {
@@ -98,8 +104,12 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     return () => {
       isMounted = false;
       codeReader.reset();
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
     };
-  }, [processBarcode, status]);
+  }, [processBarcode]);
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -116,9 +126,11 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             ref={videoRef}
             className="h-full w-full object-cover"
             playsInline
+            autoPlay
+            muted
           />
           
-          {(status === 'permission') && (
+          {(status === 'permission_denied') && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 p-4 text-center text-white">
                <CameraOff className="h-12 w-12 text-destructive" />
               <p className="mt-4">{errorMessage}</p>
