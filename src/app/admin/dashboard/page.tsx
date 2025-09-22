@@ -21,10 +21,12 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { orders, products, salesData } from '@/lib/data';
+import { orders, salesData } from '@/lib/data';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import { ProductService } from '@/services/product-service';
 
+const products = ProductService.getProducts();
 const totalRevenue = orders.reduce((acc, order) => acc + order.total, 0);
 const totalOrders = orders.length;
 const totalProducts = products.length;

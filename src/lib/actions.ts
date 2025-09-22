@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { products } from './data'; // In a real app, this would be a database import.
+import { ProductService } from '@/services/product-service';
 
 export async function login(formData: FormData) {
   // Mock authentication logic
@@ -48,12 +48,7 @@ export async function createProduct(formData: FormData) {
         return { error: "Invalid data" };
     }
 
-    const newProduct = {
-        ...validatedFields.data,
-        id: `prod${Date.now()}`, // Generate a unique ID
-    };
-
-    products.unshift(newProduct); // Add to the start of the array
+    await ProductService.createProduct(validatedFields.data);
     
     revalidatePath('/admin/products');
     redirect('/admin/products');
@@ -66,15 +61,9 @@ export async function updateProduct(formData: FormData) {
         console.error(validatedFields.error);
         return { error: "Invalid data" };
     }
-
-    const { id, ...updatedData } = validatedFields.data;
-    const productIndex = products.findIndex(p => p.id === id);
-
-    if (productIndex === -1) {
-        return { error: "Product not found" };
-    }
-
-    products[productIndex] = { ...products[productIndex], ...updatedData };
+    
+    const { id } = validatedFields.data;
+    await ProductService.updateProduct(id, validatedFields.data);
 
     revalidatePath('/admin/products');
     revalidatePath(`/admin/products/edit/${id}`);
@@ -83,11 +72,6 @@ export async function updateProduct(formData: FormData) {
 
 export async function deleteProduct(formData: FormData) {
     const id = formData.get('productId') as string;
-    
-    const productIndex = products.findIndex(p => p.id === id);
-    if (productIndex > -1) {
-        products.splice(productIndex, 1);
-    }
-
+    await ProductService.deleteProduct(id);
     revalidatePath('/admin/products');
 }

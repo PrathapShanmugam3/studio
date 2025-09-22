@@ -17,7 +17,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { products } from '@/lib/data';
 import { Badge } from '@/components/ui/badge';
 import {
   Card,
@@ -27,6 +26,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { deleteProduct } from '@/lib/actions';
+import { ProductService } from '@/services/product-service';
 
 function DeleteProductForm({ productId }: { productId: string }) {
     return (
@@ -39,8 +39,9 @@ function DeleteProductForm({ productId }: { productId: string }) {
     );
 }
 
-
 export default function ProductsAdminPage() {
+  const products = ProductService.getProducts();
+
   return (
     <Card>
       <CardHeader>

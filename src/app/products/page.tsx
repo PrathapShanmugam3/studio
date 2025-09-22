@@ -1,7 +1,8 @@
-import { products } from '@/lib/data';
+import { ProductService } from '@/services/product-service';
 import { ProductCard } from '@/components/product-card';
 
 export default function ProductsPage() {
+  const products = ProductService.getProducts();
   return (
     <div className="container mx-auto px-4 py-8 md:px-6">
       <div className="mb-8 flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
