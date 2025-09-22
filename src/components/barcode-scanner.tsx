@@ -87,14 +87,16 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         
         // Ensure the video element is playing before decoding.
         videoRef.current.oncanplay = () => {
-            codeReaderRef.current.decodeFromStream(stream, videoRef.current, (result, err) => {
-              if (result && status === 'scanning') {
-                lookupBarcode(result.getText());
-              }
-              if (err && !(err instanceof NotFoundException)) {
-                  console.error('ZXing detection error:', err);
-              }
-            });
+            if (videoRef.current) {
+                codeReaderRef.current.decodeFromStream(stream, videoRef.current, (result, err) => {
+                  if (result && status === 'scanning') {
+                    lookupBarcode(result.getText());
+                  }
+                  if (err && !(err instanceof NotFoundException)) {
+                      console.error('ZXing detection error:', err);
+                  }
+                });
+            }
         };
 
       } catch (error) {
