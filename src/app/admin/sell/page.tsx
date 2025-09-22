@@ -33,8 +33,11 @@ export default function SellPage() {
     const { toast } = useToast();
 
     const handleProductScanned = (product: BarcodeProductLookupOutput) => {
+        // Prevent adding the same product multiple times from a single continuous scan
+        if (scannedItems.some(item => item.productId === product.productId && (Date.now() - item.scanId) < 2000)) {
+            return;
+        }
         setScannedItems(prevItems => [...prevItems, {...product, scanId: Date.now()}]);
-        setIsScanning(false);
         toast({
             title: "Product Added",
             description: `${product.productName} has been added to the sale.`,
