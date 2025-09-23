@@ -75,6 +75,7 @@ export default function ProductsAdminPage() {
               <TableHead>Status</TableHead>
               <TableHead className="hidden md:table-cell">Price</TableHead>
               <TableHead className="hidden md:table-cell">Stock</TableHead>
+              <TableHead className="hidden md:table-cell">Barcode</TableHead>
               <TableHead>
                 <span className="sr-only">Actions</span>
               </TableHead>
@@ -103,6 +104,7 @@ export default function ProductsAdminPage() {
                   ${product.price.toFixed(2)}
                 </TableCell>
                 <TableCell className="hidden md:table-cell">{product.stock}</TableCell>
+                <TableCell className="hidden md:table-cell">{product.barcode}</TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

@@ -3,8 +3,12 @@ export type Product = {
   name: string;
   description: string;
   price: number;
+  wholesalePrice?: number;
+  retailPrice?: number;
   stock: number;
   image: string;
+  barcode?: string;
+  expiryDate?: string;
 };
 
 export type CartItem = {

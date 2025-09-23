@@ -35,8 +35,12 @@ const ProductSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().min(1, "Description is required"),
   price: z.coerce.number().min(0, "Price must be non-negative"),
+  wholesalePrice: z.coerce.number().min(0, "Wholesale price must be non-negative").optional(),
+  retailPrice: z.coerce.number().min(0, "Retail price must be non-negative").optional(),
   stock: z.coerce.number().int().min(0, "Stock must be a non-negative integer"),
   image: z.string().url("Must be a valid image URL"),
+  barcode: z.string().optional(),
+  expiryDate: z.string().optional(),
 });
 
 export async function createProduct(formData: FormData) {
@@ -62,8 +66,8 @@ export async function updateProduct(formData: FormData) {
         return { error: "Invalid data" };
     }
     
-    const { id } = validatedFields.data;
-    await ProductService.updateProduct(id, validatedFields.data);
+    const { id, ...productData } = validatedFields.data;
+    await ProductService.updateProduct(id, productData);
 
     revalidatePath('/admin/products');
     revalidatePath(`/admin/products/edit/${id}`);

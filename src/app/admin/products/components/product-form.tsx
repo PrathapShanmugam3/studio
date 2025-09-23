@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -20,15 +21,19 @@ import { Textarea } from '@/components/ui/textarea';
 import type { Product } from '@/lib/types';
 import { createProduct, updateProduct } from '@/lib/actions';
 
-const ProductSchema = z.object({
+const ProductFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().min(1, 'Description is required'),
   price: z.coerce.number().min(0, 'Price must be non-negative'),
+  wholesalePrice: z.coerce.number().min(0, "Wholesale price must be non-negative").optional(),
+  retailPrice: z.coerce.number().min(0, "Retail price must be non-negative").optional(),
   stock: z.coerce.number().int().min(0, 'Stock must be a non-negative integer'),
   image: z.string().url('Must be a valid image URL'),
+  barcode: z.string().optional(),
+  expiryDate: z.string().optional(),
 });
 
-type ProductFormData = z.infer<typeof ProductSchema>;
+type ProductFormData = z.infer<typeof ProductFormSchema>;
 
 interface ProductFormProps {
   product?: Product;
@@ -41,21 +46,32 @@ export function ProductForm({ product }: ProductFormProps) {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<ProductFormData>({
-    resolver: zodResolver(ProductSchema),
+    resolver: zodResolver(ProductFormSchema),
     defaultValues: {
       name: product?.name || '',
       description: product?.description || '',
       price: product?.price || 0,
+      wholesalePrice: product?.wholesalePrice || 0,
+      retailPrice: product?.retailPrice || 0,
       stock: product?.stock || 0,
       image: product?.image || 'https://picsum.photos/seed/new-product/400/400',
+      barcode: product?.barcode || '',
+      expiryDate: product?.expiryDate ? format(parseISO(product.expiryDate), 'yyyy-MM-dd') : '',
     },
   });
 
   const onSubmit = async (data: ProductFormData) => {
     const formData = new FormData();
-    Object.entries(data).forEach(([key, value]) => {
-      formData.append(key, String(value));
-    });
+    // Manually build formData to ensure correct types and format
+    formData.append('name', data.name);
+    formData.append('description', data.description);
+    formData.append('price', String(data.price));
+    formData.append('stock', String(data.stock));
+    formData.append('image', data.image);
+    if (data.wholesalePrice) formData.append('wholesalePrice', String(data.wholesalePrice));
+    if (data.retailPrice) formData.append('retailPrice', String(data.retailPrice));
+    if (data.barcode) formData.append('barcode', data.barcode);
+    if (data.expiryDate) formData.append('expiryDate', new Date(data.expiryDate).toISOString());
 
     if (product) {
       formData.append('id', product.id);
@@ -119,28 +135,60 @@ export function ProductForm({ product }: ProductFormProps) {
                   <p className="text-sm text-destructive">{errors.description.message}</p>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                 <div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-3">
+                  <Label htmlFor="barcode">Barcode</Label>
+                  <Input id="barcode" {...register('barcode')} />
+                  {errors.barcode && (
+                    <p className="text-sm text-destructive">{errors.barcode.message}</p>
+                  )}
+                </div>
+                <div className="grid gap-3">
+                  <Label htmlFor="stock">Stock Quantity</Label>
+                  <Input id="stock" type="number" {...register('stock')} />
+                  {errors.stock && (
+                    <p className="text-sm text-destructive">{errors.stock.message}</p>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                 <div className="grid gap-3">
                     <Label htmlFor="price">Price</Label>
                     <Input id="price" type="number" step="0.01" {...register('price')} />
                     {errors.price && (
                     <p className="text-sm text-destructive">{errors.price.message}</p>
                     )}
                  </div>
-                 <div>
-                    <Label htmlFor="stock">Stock</Label>
-                    <Input id="stock" type="number" {...register('stock')} />
-                    {errors.stock && (
-                    <p className="text-sm text-destructive">{errors.stock.message}</p>
+                 <div className="grid gap-3">
+                    <Label htmlFor="wholesalePrice">Wholesale Price</Label>
+                    <Input id="wholesalePrice" type="number" step="0.01" {...register('wholesalePrice')} />
+                    {errors.wholesalePrice && (
+                    <p className="text-sm text-destructive">{errors.wholesalePrice.message}</p>
+                    )}
+                 </div>
+                  <div className="grid gap-3">
+                    <Label htmlFor="retailPrice">Retail Price</Label>
+                    <Input id="retailPrice" type="number" step="0.01" {...register('retailPrice')} />
+                    {errors.retailPrice && (
+                    <p className="text-sm text-destructive">{errors.retailPrice.message}</p>
                     )}
                  </div>
               </div>
-              <div className="grid gap-3">
-                <Label htmlFor="image">Image URL</Label>
-                <Input id="image" {...register('image')} />
-                {errors.image && (
-                  <p className="text-sm text-destructive">{errors.image.message}</p>
-                )}
+               <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-3">
+                  <Label htmlFor="image">Image URL</Label>
+                  <Input id="image" {...register('image')} />
+                  {errors.image && (
+                    <p className="text-sm text-destructive">{errors.image.message}</p>
+                  )}
+                </div>
+                <div className="grid gap-3">
+                  <Label htmlFor="expiryDate">Expiry Date</Label>
+                  <Input id="expiryDate" type="date" {...register('expiryDate')} />
+                  {errors.expiryDate && (
+                    <p className="text-sm text-destructive">{errors.expiryDate.message}</p>
+                  )}
+                </div>
               </div>
             </div>
           </CardContent>
