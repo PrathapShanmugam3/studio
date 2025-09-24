@@ -3,10 +3,9 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { BrowserMultiFormatReader, NotFoundException, Exception, Result } from '@zxing/library';
-import { Camera, X, ZoomIn } from 'lucide-react';
+import { Camera, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 
 interface BarcodeScannerProps {
@@ -23,19 +22,11 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const { toast } = useToast();
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
-  const [scannedList, setScannedList] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   const codeReaderRef = useRef(new BrowserMultiFormatReader());
   const controlsRef = useRef<ScannerControls | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-
-  // Zoom state
-  const [zoom, setZoom] = useState(1);
-  const [zoomSupport, setZoomSupport] = useState(false);
-  const [zoomMin, setZoomMin] = useState(1);
-  const [zoomMax, setZoomMax] = useState(1);
-  const [zoomStep, setZoomStep] = useState(0.1);
 
   // 🔹 Get available cameras
   useEffect(() => {
@@ -129,14 +120,17 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             const capabilities = videoTrack.getCapabilities();
 
             if (capabilities.zoom) {
-                setZoomSupport(true);
-                setZoomMin(capabilities.zoom.min);
-                setZoomMax(capabilities.zoom.max);
-                setZoomStep(capabilities.zoom.step);
-                setZoom(1); // Reset zoom on camera switch
-            } else {
-                setZoomSupport(false);
+              const zoomMin = capabilities.zoom.min;
+              const zoomMax = capabilities.zoom.max;
+              // Apply 40% zoom
+              const zoomValue = zoomMin + (zoomMax - zoomMin) * 0.4;
+              try {
+                await videoTrack.applyConstraints({ advanced: [{ zoom: zoomValue }] });
+              } catch (zoomError) {
+                console.error("Failed to apply zoom", zoomError);
+              }
             }
+
 
             videoRef.current.srcObject = stream;
             await videoRef.current.play();
@@ -194,17 +188,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     };
   }, [selectedDeviceId, onClose, onScan, toast]);
 
-  // Apply zoom when slider changes
-  useEffect(() => {
-      if (zoomSupport && streamRef.current) {
-          const videoTrack = streamRef.current.getVideoTracks()[0];
-          if (videoTrack && videoTrack.getCapabilities().zoom) {
-              videoTrack.applyConstraints({ advanced: [{ zoom }] }).catch(e => console.error("Failed to apply zoom", e));
-          }
-      }
-  }, [zoom, zoomSupport]);
-
-
   const handleSwitchCamera = () => {
     if (videoDevices.length > 1 && selectedDeviceId) {
       const currentIndex = videoDevices.findIndex(device => device.deviceId === selectedDeviceId);
@@ -238,23 +221,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
              </div>
           )}
         </div>
-
-        {zoomSupport && (
-            <div className="mt-4 grid gap-2">
-                <Label htmlFor="zoom-slider" className="flex items-center gap-2 text-sm">
-                    <ZoomIn className="h-4 w-4" /> Zoom
-                </Label>
-                <Slider
-                    id="zoom-slider"
-                    min={zoomMin}
-                    max={zoomMax}
-                    step={zoomStep}
-                    value={[zoom]}
-                    onValueChange={(value) => setZoom(value[0])}
-                />
-            </div>
-        )}
-
+        
         <div className="flex justify-between items-center mt-4">
           <Button variant="outline" onClick={onClose} disabled={loading}>
             Cancel
