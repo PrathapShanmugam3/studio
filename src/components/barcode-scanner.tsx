@@ -1,14 +1,14 @@
+
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserMultiFormatReader, NotFoundException, Result, Exception } from '@zxing/library';
 import { Loader2, CameraOff, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { BarcodeProductLookupOutput } from '@/ai/flows/barcode-product-lookup';
 import { useToast } from '@/hooks/use-toast';
 
 interface BarcodeScannerProps {
-  onScan: (product: BarcodeProductLookupOutput) => void;
+  onScan: (text: string) => void;
   onClose: () => void;
 }
 
@@ -31,32 +31,50 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         description: `Value: ${barcodeText}`,
     });
 
+    onScan(barcodeText);
     onClose();
 
-  }, [onClose, toast]);
+  }, [onScan, onClose, toast]);
 
   useEffect(() => {
     let isMounted = true;
     const codeReader = new BrowserMultiFormatReader();
     let controls: any;
+    let lastScanTime = 0;
+    const SCAN_INTERVAL = 200; // ms
 
     const startScanner = async () => {
       if (!videoRef.current) return;
       try {
-        // Use decodeFromVideoDevice which handles stream setup
-        controls = await codeReader.decodeFromVideoDevice(undefined, videoRef.current, (result: Result | undefined, error: Exception | undefined) => {
-            if (!isMounted) return;
-            if (result && !isProcessingRef.current) {
-                processBarcode(result.getText());
-            }
-            if (error && !(error instanceof NotFoundException)) {
-                console.error('ZXing decode error:', error);
-                if (isMounted) {
-                  setErrorMessage('Error during scanning. Please check console.');
-                  setStatus('error');
+        const constraints = {
+          video: {
+            facingMode: "environment",
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+          },
+        };
+
+        controls = await codeReader.decodeFromConstraints(
+            { video: constraints.video }, 
+            videoRef.current, 
+            (result: Result | undefined, error: Exception | undefined) => {
+                if (!isMounted) return;
+                
+                const now = Date.now();
+                if (result && !isProcessingRef.current && now - lastScanTime > SCAN_INTERVAL) {
+                    lastScanTime = now;
+                    processBarcode(result.getText());
+                }
+
+                if (error && !(error instanceof NotFoundException)) {
+                    console.error('ZXing decode error:', error);
+                    if (isMounted) {
+                      setErrorMessage('Error during scanning. Please check console.');
+                      setStatus('error');
+                    }
                 }
             }
-        });
+        );
       } catch (err: any) {
         console.error('Camera initialization error', err);
         if (isMounted) {
