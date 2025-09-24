@@ -39,8 +39,8 @@ function DeleteProductForm({ productId }: { productId: string }) {
     );
 }
 
-export default function ProductsAdminPage() {
-  const products = ProductService.getProducts();
+export default async function ProductsAdminPage() {
+  const products = await ProductService.getProducts();
 
   return (
     <Card>

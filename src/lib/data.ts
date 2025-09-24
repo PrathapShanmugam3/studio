@@ -1,9 +1,5 @@
 import type { Order } from './types';
 import { format, subDays } from 'date-fns';
-import { ProductService } from '@/services/product-service';
-
-// Re-export products from the service to maintain a single source of truth
-export const products = ProductService.getProducts();
 
 export const orders: Order[] = [
     {

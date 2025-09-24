@@ -11,6 +11,10 @@ export type Product = {
   expiryDate?: string;
 };
 
+export type ApiProduct = Omit<Product, 'stock'> & {
+  qty: number;
+};
+
 export type CartItem = {
   id: string;
   name: string;
@@ -26,4 +30,12 @@ export type Order = {
   customerName: string;
   date: string;
   status: 'Pending' | 'Completed' | 'Cancelled';
+};
+
+export type ApiResponse<T> = {
+  statusCode: number;
+  errorCode: string | null;
+  message: string | null;
+  errorDescription: string | null;
+  responseContent: T;
 };
