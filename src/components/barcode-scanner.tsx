@@ -1,102 +1,94 @@
 
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader, NotFoundException, Result, Exception } from '@zxing/library';
-import { Loader2, CameraOff, X } from 'lucide-react';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
+import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { barcodeProductLookup } from '@/ai/flows/barcode-product-lookup';
 
 interface BarcodeScannerProps {
-  onScan: (text: string) => void;
+  onScan: (product: any) => void;
   onClose: () => void;
 }
 
 export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [status, setStatus] = useState<'scanning' | 'loading' | 'permission_denied' | 'error'>('scanning');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const isProcessingRef = useRef(false);
-
+  const videoRef = useRef<HTMLVideoElement>(null);
   const { toast } = useToast();
 
   const processBarcode = useCallback(async (barcodeText: string) => {
-    if (isProcessingRef.current) return;
-    isProcessingRef.current = true;
-    
-    console.log(`Detected barcode: ${barcodeText}`);
-    
     toast({
-        title: "Barcode Scanned",
-        description: `Value: ${barcodeText}`,
+      title: 'Barcode Scanned',
+      description: `Looking up product...`,
     });
 
-    onScan(barcodeText);
-    onClose();
-
+    try {
+      const product = await barcodeProductLookup({ barcode: barcodeText });
+      onScan(product);
+      onClose();
+    } catch (error) {
+      console.error('Product lookup failed:', error);
+      toast({
+        title: 'Product Not Found',
+        description: 'Could not find a product for the scanned barcode.',
+        variant: 'destructive',
+      });
+      // Allow for another scan
+    }
   }, [onScan, onClose, toast]);
 
   useEffect(() => {
-    let isMounted = true;
     const codeReader = new BrowserMultiFormatReader();
     let controls: any;
-    let lastScanTime = 0;
-    const SCAN_INTERVAL = 200; // ms
 
-    const startScanner = async () => {
+    const startScanning = async () => {
       if (!videoRef.current) return;
       try {
-        const constraints = {
-          video: {
-            facingMode: "environment",
-            width: { ideal: 640 },
-            height: { ideal: 480 },
-          },
-        };
-
-        controls = await codeReader.decodeFromConstraints(
-            { video: constraints.video }, 
-            videoRef.current, 
-            (result: Result | undefined, error: Exception | undefined) => {
-                if (!isMounted) return;
-                
-                const now = Date.now();
-                if (result && !isProcessingRef.current && now - lastScanTime > SCAN_INTERVAL) {
-                    lastScanTime = now;
-                    processBarcode(result.getText());
-                }
-
-                if (error && !(error instanceof NotFoundException)) {
-                    console.error('ZXing decode error:', error);
-                    if (isMounted) {
-                      setErrorMessage('Error during scanning. Please check console.');
-                      setStatus('error');
-                    }
-                }
+        const videoInputDevices = await codeReader.listVideoInputDevices();
+        const selectedDeviceId = videoInputDevices[0].deviceId;
+        
+        controls = codeReader.decodeFromVideoDevice(
+          selectedDeviceId,
+          videoRef.current,
+          (result, err) => {
+            if (result) {
+              processBarcode(result.getText());
+              // Stop decoding after one successful scan
+              if (controls) {
+                controls.stop();
+              }
             }
+            if (err && !(err instanceof NotFoundException)) {
+              console.error('Barcode decoding error:', err);
+              toast({
+                  title: 'Scanning Error',
+                  description: 'An error occurred while trying to scan.',
+                  variant: 'destructive'
+              })
+            }
+          }
         );
-      } catch (err: any) {
-        console.error('Camera initialization error', err);
-        if (isMounted) {
-          setStatus('permission_denied');
-          setErrorMessage(
-            err?.name === 'NotAllowedError'
-              ? 'Camera permission denied. Please allow camera access in your browser.'
-              : err?.message || 'Could not access camera. It might be in use by another app.'
-          );
-        }
+      } catch (error) {
+        console.error('Error starting scanner:', error);
+         toast({
+            title: 'Camera Error',
+            description: 'Could not access camera. Please ensure permissions are granted and the camera is not in use by another app.',
+            variant: 'destructive'
+        });
+        onClose();
       }
     };
 
-    startScanner();
+    startScanning();
 
     return () => {
-      isMounted = false;
       if (controls) {
         controls.stop();
       }
     };
-  }, [processBarcode]);
+  }, [onClose, processBarcode, toast]);
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
@@ -121,35 +113,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
               <div className="w-3/4 h-1/2 border-2 border-red-500/70 rounded-lg" />
            </div>
         </div>
-
-        {status === 'permission_denied' && (
-          <div className="mt-3 flex items-center gap-2 text-sm text-red-600">
-            <CameraOff className="w-5 h-5" />
-            <div>
-              <div className="font-medium">Camera Access Denied</div>
-              <div className="text-xs text-muted-foreground">{errorMessage}</div>
-            </div>
-          </div>
-        )}
-
-        {status === 'loading' && (
-          <div className="mt-3 flex items-center gap-2 text-sm">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <div>Looking up barcode...</div>
-          </div>
-        )}
-
-         {status === 'scanning' && !isProcessingRef.current && (
-            <div className="mt-3 flex items-center justify-center text-sm text-green-600">
-                <p>Ready to scan</p>
-            </div>
-        )}
-
-        {status === 'error' && errorMessage && (
-          <div className="mt-3 text-sm text-red-600">
-            {errorMessage}
-          </div>
-        )}
 
         <div className="flex justify-end mt-4">
           <Button variant="outline" onClick={onClose}>
