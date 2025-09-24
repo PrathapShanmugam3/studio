@@ -22,7 +22,9 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const isProcessingRef = useRef(false);
 
   const processBarcode = useCallback(async (barcodeText: string) => {
+    if (isProcessingRef.current) return;
     isProcessingRef.current = true;
+    
     toast({
       title: 'Barcode Scanned',
       description: `Looking up product...`,
@@ -39,73 +41,33 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         description: 'Could not find a product for the scanned barcode.',
         variant: 'destructive',
       });
-      // Reset for next scan attempt
-      isProcessingRef.current = false; 
+      // Reset for next scan attempt, in case the modal doesn't close
+      isProcessingRef.current = false;
     }
   }, [onScan, onClose, toast]);
-
+  
+  // Effect for initializing devices
   useEffect(() => {
-    const codeReader = codeReaderRef.current;
-    let controls: any;
     let isMounted = true;
-
-    const startScanning = async () => {
-      if (!videoRef.current || !selectedDeviceId) return;
-
-      // Ensure previous stream is stopped
-      if (controls) {
-        controls.stop();
-      }
-      
-      isProcessingRef.current = false;
-
-      try {
-        controls = codeReader.decodeFromVideoDevice(
-          selectedDeviceId,
-          videoRef.current,
-          (result: Result | undefined, err: Exception | undefined) => {
-            if (!isMounted) return;
-
-            if (result && !isProcessingRef.current) {
-              processBarcode(result.getText());
-            }
-            if (err && !(err instanceof NotFoundException)) {
-              console.error('Barcode decoding error:', err);
-            }
-          }
-        );
-      } catch (error) {
-        console.error('Error starting scanner:', error);
-        toast({
-          title: 'Camera Error',
-          description: 'Could not access camera. Please ensure permissions are granted.',
-          variant: 'destructive'
-        });
-        onClose();
-      }
-    };
-
-    startScanning();
-
-    return () => {
-      isMounted = false;
-      if (controls) {
-        controls.stop();
-      }
-    };
-  }, [selectedDeviceId, onClose, processBarcode]);
-
-  useEffect(() => {
     const getDevices = async () => {
       try {
-        await navigator.mediaDevices.getUserMedia({ video: true }); // Request permission
+        // First, ensure we have permission
+        await navigator.mediaDevices.getUserMedia({ video: true });
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoInputDevices = devices.filter(device => device.kind === 'videoinput');
-        setVideoDevices(videoInputDevices);
-        if (videoInputDevices.length > 0) {
+
+        if (isMounted && videoInputDevices.length > 0) {
+          setVideoDevices(videoInputDevices);
           // Prefer environment (back) camera
           const backCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back'));
           setSelectedDeviceId(backCamera?.deviceId || videoInputDevices[0].deviceId);
+        } else if (isMounted) {
+            toast({
+              title: 'No Camera Found',
+              description: 'Could not find any video devices.',
+              variant: 'destructive'
+            });
+            onClose();
         }
       } catch (error) {
         console.error("Could not get video devices.", error);
@@ -117,11 +79,65 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         onClose();
       }
     };
+    
     getDevices();
+
+    return () => {
+      isMounted = false;
+    };
   }, [onClose, toast]);
 
+
+  // Effect for starting/stopping the scanner
+  useEffect(() => {
+    if (!selectedDeviceId || !videoRef.current) {
+      return;
+    }
+
+    const codeReader = codeReaderRef.current;
+    let isMounted = true;
+
+    const startScanning = async () => {
+        isProcessingRef.current = false; // Reset processing flag
+        try {
+            await codeReader.decodeFromVideoDevice(
+              selectedDeviceId,
+              videoRef.current,
+              (result, err) => {
+                if (!isMounted) return;
+
+                if (result) {
+                    processBarcode(result.getText());
+                }
+                
+                if (err && !(err instanceof NotFoundException)) {
+                    console.error('Barcode decoding error:', err);
+                }
+              }
+            );
+        } catch (startError) {
+            console.error('Error starting scanner:', startError);
+             toast({
+                title: 'Scanner Start Error',
+                description: 'Failed to initialize the scanner with the selected camera.',
+                variant: 'destructive'
+             });
+            onClose();
+        }
+    };
+
+    startScanning();
+
+    // Cleanup function
+    return () => {
+        isMounted = false;
+        codeReader.reset(); // This properly stops the decoding and releases the camera
+    };
+  }, [selectedDeviceId, processBarcode, onClose, toast]);
+  
+
   const handleSwitchCamera = () => {
-    if (videoDevices.length > 1) {
+    if (videoDevices.length > 1 && selectedDeviceId) {
       const currentIndex = videoDevices.findIndex(device => device.deviceId === selectedDeviceId);
       const nextIndex = (currentIndex + 1) % videoDevices.length;
       setSelectedDeviceId(videoDevices[nextIndex].deviceId);
