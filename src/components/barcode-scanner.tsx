@@ -12,6 +12,7 @@ interface BarcodeScannerProps {
   onClose: () => void;
 }
 
+// Define a type for the scanner controls for type safety.
 type ScannerControls = {
   stop: () => void;
 };
@@ -21,23 +22,26 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const { toast } = useToast();
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
+  
+  // Use a ref to hold a stable instance of the code reader.
   const codeReaderRef = useRef(new BrowserMultiFormatReader());
+  // Use a ref to hold the controls object, which has the .stop() method.
   const controlsRef = useRef<ScannerControls | null>(null);
-  const isProcessingRef = useRef(false);
-  const lastScanTimeRef = useRef(0);
 
+  // This effect runs once to get camera permissions and list devices.
   useEffect(() => {
     let isMounted = true;
-
-    const initializeScanner = async () => {
+    const getCameraDevices = async () => {
       try {
-        await navigator.mediaDevices.getUserMedia({ video: true }); 
+        // First, ask for permission to ensure device labels are available.
+        await navigator.mediaDevices.getUserMedia({ video: true });
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoInputDevices = devices.filter(device => device.kind === 'videoinput');
 
         if (isMounted) {
           if (videoInputDevices.length > 0) {
             setVideoDevices(videoInputDevices);
+            // Prefer the back camera ('environment') for mobile devices.
             const backCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back')) || 
                                videoInputDevices.find(device => device.label.toLowerCase().includes('environment'));
             setSelectedDeviceId(backCamera?.deviceId || videoInputDevices[0].deviceId);
@@ -53,10 +57,11 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       }
     };
 
-    initializeScanner();
+    getCameraDevices();
 
     return () => {
       isMounted = false;
+      // Ensure the camera is released when the component unmounts.
       if (controlsRef.current) {
         controlsRef.current.stop();
         controlsRef.current = null;
@@ -64,47 +69,47 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     };
   }, [onClose, toast]);
 
+
+  // This effect starts/restarts the scanner whenever the selected camera changes.
   useEffect(() => {
     if (!selectedDeviceId || !videoRef.current) {
       return;
     }
     
-    // If there's an existing control, stop it before starting a new one.
+    // Stop any existing scanner before starting a new one.
     if (controlsRef.current) {
       controlsRef.current.stop();
+      controlsRef.current = null;
     }
 
     const codeReader = codeReaderRef.current;
-    isProcessingRef.current = false;
-
-    const constraints = {
-        video: {
-            deviceId: { exact: selectedDeviceId },
-            width: { ideal: 640 },
-            height: { ideal: 480 },
-        },
-    };
+    let isProcessing = false;
+    let lastScanTime = 0;
+    const SCAN_INTERVAL = 200; // ms
 
     const startScanning = async () => {
         try {
-            // Guard against null videoRef.current
             if (!videoRef.current) return;
+
+            const constraints: MediaStreamConstraints = {
+                video: {
+                    deviceId: { exact: selectedDeviceId },
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                },
+            };
 
             const controls = await codeReader.decodeFromConstraints(
                 constraints,
                 videoRef.current,
                 (result: Result | undefined, err: Exception | undefined) => {
-                    if (result && !isProcessingRef.current) {
+                    if (result && !isProcessing) {
                         const now = Date.now();
-                        const SCAN_INTERVAL = 200;
-                        if (now - lastScanTimeRef.current > SCAN_INTERVAL) {
-                            lastScanTimeRef.current = now;
-                            isProcessingRef.current = true; // Prevents multiple scans of the same code
+                        if (now - lastScanTime > SCAN_INTERVAL) {
+                            lastScanTime = now;
+                            isProcessing = true;
                             onScan(result.getText());
-                            // Stop scanning after a successful scan
-                            if (controlsRef.current) {
-                                controlsRef.current.stop();
-                            }
+                            // Do not close here, let the parent component decide.
                         }
                     }
                     if (err && !(err instanceof NotFoundException)) {
@@ -112,6 +117,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
                     }
                 }
             );
+            // Store the controls so we can stop the stream later.
             controlsRef.current = controls;
         } catch (startError) {
             console.error('Error starting scanner:', startError);
@@ -123,15 +129,16 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             onClose();
         }
     };
-
-    startScanning();
     
+    startScanning();
+
+    // The main cleanup is in the unmount effect, but this ensures controls are reset on device change.
     return () => {
         if (controlsRef.current) {
             controlsRef.current.stop();
             controlsRef.current = null;
         }
-    }
+    };
 
   }, [selectedDeviceId, onScan, onClose, toast]);
   
@@ -143,7 +150,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       setSelectedDeviceId(videoDevices[nextIndex].deviceId);
     }
   };
-
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
