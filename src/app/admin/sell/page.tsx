@@ -41,23 +41,23 @@ export default function SellPage() {
           description: `Looking up product for barcode: ${barcode}`,
         });
 
-        try {
-          const product = await barcodeProductLookup({ barcode });
-          setScannedItems(prevItems => [...prevItems, {...product, scanId: Date.now()}]);
-          toast({
-              title: "Product Added",
-              description: `${product.productName} has been added to the sale.`,
-          });
-        } catch (error) {
-            console.error('Product lookup failed:', error);
-            toast({
-                title: 'Product Not Found',
-                description: 'Could not find a product for the scanned barcode.',
-                variant: 'destructive',
-            });
-        } finally {
-            setIsLookingUp(false);
-        }
+        // try {
+        //   const product = await barcodeProductLookup({ barcode });
+        //   setScannedItems(prevItems => [...prevItems, {...product, scanId: Date.now()}]);
+        //   toast({
+        //       title: "Product Added",
+        //       description: `${product.productName} has been added to the sale.`,
+        //   });
+        // } catch (error) {
+        //     console.error('Product lookup failed:', error);
+        //     toast({
+        //         title: 'Product Not Found',
+        //         description: 'Could not find a product for the scanned barcode.',
+        //         variant: 'destructive',
+        //     });
+        // } finally {
+        //     setIsLookingUp(false);
+        // }
     };
 
 
