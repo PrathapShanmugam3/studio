@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader, NotFoundException, Exception, DecodeHintType } from '@zxing/library';
+import { BrowserMultiFormatReader, NotFoundException, Exception, DecodeHintType, IScannerControls } from '@zxing/library';
 import { Camera, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -17,26 +17,32 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const { toast } = useToast();
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
-  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+  
+  // Use refs for instances that should not trigger re-renders
+  const codeReaderRef = useRef(new BrowserMultiFormatReader());
+  const controlsRef = useRef<IScannerControls | null>(null);
+  const lastScanTimeRef = useRef(0);
   const isProcessingRef = useRef(false);
+  const SCAN_INTERVAL = 200; // ms
 
-  // Effect for initializing devices and the code reader
+  // Effect for initializing and enumerating video devices
   useEffect(() => {
-    const hints = new Map();
-    const formats = [10, 11, 1, 2, 4, 7, 8, 9, 12, 13, 14, 15, 16, 17, 18, 19];
-    hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
-    codeReaderRef.current = new BrowserMultiFormatReader(hints);
-
     let isMounted = true;
     const getDevices = async () => {
       try {
-        await navigator.mediaDevices.getUserMedia({ video: true });
+        // First, ensure we have permission by asking for a stream.
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        // Stop the tracks immediately, we just needed permission.
+        stream.getTracks().forEach(track => track.stop());
+
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoInputDevices = devices.filter(device => device.kind === 'videoinput');
 
         if (isMounted && videoInputDevices.length > 0) {
           setVideoDevices(videoInputDevices);
-          const backCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back'));
+          // Prefer the back camera ('environment') if available
+          const backCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back')) || 
+                             videoInputDevices.find(device => device.label.toLowerCase().includes('environment'));
           setSelectedDeviceId(backCamera?.deviceId || videoInputDevices[0].deviceId);
         } else if (isMounted) {
           toast({ title: 'No Camera Found', description: 'Could not find any video devices.', variant: 'destructive' });
@@ -55,28 +61,38 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   }, [onClose, toast]);
 
 
-  // Effect for starting/stopping the scanner
+  // Effect for starting/stopping the scanner when the selected device changes
   useEffect(() => {
-    if (!selectedDeviceId || !videoRef.current || !codeReaderRef.current) {
+    if (!selectedDeviceId || !videoRef.current) {
       return;
     }
 
     const codeReader = codeReaderRef.current;
     let isMounted = true;
-    isProcessingRef.current = false; // Reset processing flag
+    isProcessingRef.current = false;
+
+    const constraints = {
+        video: {
+            deviceId: { exact: selectedDeviceId },
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+        },
+    };
 
     const startScanning = async () => {
         try {
-            await codeReader.decodeFromVideoDevice(
-              selectedDeviceId,
+            const controls = await codeReader.decodeFromConstraints(
+              { video: constraints.video },
               videoRef.current,
               (result, err) => {
                 if (!isMounted || isProcessingRef.current) return;
-
-                if (result) {
-                    isProcessingRef.current = true;
+                
+                const now = Date.now();
+                if (result && (now - lastScanTimeRef.current > SCAN_INTERVAL)) {
+                    lastScanTimeRef.current = now;
+                    isProcessingRef.current = true; // Set flag to prevent further scans
                     onScan(result.getText());
-                    // onClose is called by the parent component after handling the scan
+                    // The parent component will call onClose, which triggers cleanup.
                 }
                 
                 if (err && !(err instanceof NotFoundException) && !(err instanceof DOMException)) {
@@ -89,12 +105,13 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
                 }
               }
             );
+            controlsRef.current = controls;
         } catch (startError) {
             console.error('Error starting scanner:', startError);
             if(isMounted) {
                  toast({
                     title: 'Scanner Start Error',
-                    description: 'Failed to initialize the scanner. The camera might be in use by another application.',
+                    description: 'Failed to initialize the scanner. The camera might be in use.',
                     variant: 'destructive'
                  });
                 onClose();
@@ -107,9 +124,9 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     // Cleanup function
     return () => {
         isMounted = false;
-        isProcessingRef.current = true; // prevent any pending callbacks from firing
-        if (codeReader) {
-          codeReader.reset(); 
+        if (controlsRef.current) {
+          controlsRef.current.stop();
+          controlsRef.current = null;
         }
     };
   }, [selectedDeviceId, onScan, onClose, toast]);
