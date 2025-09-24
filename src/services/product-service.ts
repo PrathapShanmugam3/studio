@@ -1,13 +1,31 @@
+
 import type { Product, ApiProduct } from '@/lib/types';
 import { ApiService } from './api-service';
 
+// Helper to check if a URL is valid
+function isValidHttpUrl(string: string) {
+  let url;
+  try {
+    url = new URL(string);
+  } catch (_) {
+    return false;
+  }
+  return url.protocol === "http:" || url.protocol === "https:";
+}
+
+
 // Helper to convert API product shape to our app's Product shape
 function fromApiProduct(apiProduct: ApiProduct): Product {
+  const image = isValidHttpUrl(apiProduct.image) 
+    ? apiProduct.image 
+    : `https://picsum.photos/seed/${apiProduct.id || 'placeholder'}/400/400`;
+
   return {
     ...apiProduct,
     id: String(apiProduct.id), // Ensure id is a string
     stock: apiProduct.qty,
     description: apiProduct.name, // Assuming name can be used as description
+    image: image,
   };
 }
 
@@ -55,7 +73,8 @@ export class ProductService {
   static async updateProduct(id: string, productData: Partial<Omit<Product, 'id'>>): Promise<Product | null> {
     const apiPayload = toApiProduct(productData);
     try {
-      const data = await ApiService.put<ApiProduct>(`/update/${id}`, apiPayload);
+      // The API expects the ID in the URL, not the body for updates.
+      const data = await ApiService.put<ApiProduct>(`/update/${id}`, { ...apiPayload, id: undefined });
       return fromApiProduct(data);
     } catch (error) {
       console.error(`Failed to update product with id ${id}:`, error);
