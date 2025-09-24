@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import type { BarcodeProductLookupOutput } from '@/ai/flows/barcode-product-lookup';
+import { barcodeProductLookup, type BarcodeProductLookupOutput } from '@/ai/flows/barcode-product-lookup';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,17 +29,37 @@ export default function SellPage() {
     const [isScanning, setIsScanning] = useState(false);
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
     const [isCheckingOut, setIsCheckingOut] = useState(false);
+    const [isLookingUp, setIsLookingUp] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     const { toast } = useToast();
 
-    const handleProductScanned = (product: BarcodeProductLookupOutput) => {
-        setScannedItems(prevItems => [...prevItems, {...product, scanId: Date.now()}]);
+    const handleBarcodeScanned = async (barcode: string) => {
         setIsScanning(false);
+        setIsLookingUp(true);
         toast({
-            title: "Product Added",
-            description: `${product.productName} has been added to the sale.`,
+          title: 'Barcode Scanned',
+          description: `Looking up product for barcode: ${barcode}`,
         });
+
+        try {
+          const product = await barcodeProductLookup({ barcode });
+          setScannedItems(prevItems => [...prevItems, {...product, scanId: Date.now()}]);
+          toast({
+              title: "Product Added",
+              description: `${product.productName} has been added to the sale.`,
+          });
+        } catch (error) {
+            console.error('Product lookup failed:', error);
+            toast({
+                title: 'Product Not Found',
+                description: 'Could not find a product for the scanned barcode.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsLookingUp(false);
+        }
     };
+
 
     const handleRemoveItem = (scanId: number) => {
         setScannedItems(prevItems => prevItems.filter(item => item.scanId !== scanId));
@@ -71,7 +91,12 @@ export default function SellPage() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        {scannedItems.length === 0 ? (
+                        {isLookingUp ? (
+                            <div className="flex flex-col items-center justify-center text-center text-muted-foreground border-2 border-dashed rounded-lg p-12">
+                                <Loader2 className="w-16 h-16 mb-4 animate-spin" />
+                                <h3 className="text-xl font-semibold">Looking up product...</h3>
+                            </div>
+                        ) : scannedItems.length === 0 ? (
                              <div className="flex flex-col items-center justify-center text-center text-muted-foreground border-2 border-dashed rounded-lg p-12">
                                 <ShoppingCart className="w-16 h-16 mb-4" />
                                 <h3 className="text-xl font-semibold mb-2">No items in sale</h3>
@@ -103,7 +128,7 @@ export default function SellPage() {
                         )}
                     </CardContent>
                      <CardFooter className="flex-col items-stretch gap-2">
-                        <Button size="lg" onClick={() => setIsScanning(true)} disabled={isScanning}>
+                        <Button size="lg" onClick={() => setIsScanning(true)} disabled={isScanning || isLookingUp}>
                             <ScanLine className="mr-2 h-5 w-5" />
                             {scannedItems.length > 0 ? 'Scan Another Product' : 'Start Scanning'}
                         </Button>
@@ -142,7 +167,7 @@ export default function SellPage() {
                         <Button 
                             className="w-full bg-accent hover:bg-accent/90" 
                             size="lg" 
-                            disabled={scannedItems.length === 0 || isCheckingOut}
+                            disabled={scannedItems.length === 0 || isCheckingOut || isLookingUp}
                             onClick={handleCheckout}
                         >
                             {isCheckingOut ? (
@@ -159,7 +184,7 @@ export default function SellPage() {
         
         {isScanning && (
             <BarcodeScanner
-                onScan={handleProductScanned}
+                onScan={handleBarcodeScanned}
                 onClose={() => setIsScanning(false)}
             />
         )}

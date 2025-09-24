@@ -1,15 +1,14 @@
 
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader, NotFoundException, Result } from '@zxing/library';
+import React, { useEffect, useRef, useState } from 'react';
+import { BrowserMultiFormatReader, NotFoundException, Exception, DecodeHintType } from '@zxing/library';
 import { Camera, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { barcodeProductLookup } from '@/ai/flows/barcode-product-lookup';
 
 interface BarcodeScannerProps {
-  onScan: (product: any) => void;
+  onScan: (text: string) => void;
   onClose: () => void;
 }
 
@@ -18,111 +17,88 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const { toast } = useToast();
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
-  const codeReaderRef = useRef(new BrowserMultiFormatReader());
+  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
   const isProcessingRef = useRef(false);
 
-  const processBarcode = useCallback(async (barcodeText: string) => {
-    if (isProcessingRef.current) return;
-    isProcessingRef.current = true;
-    
-    toast({
-      title: 'Barcode Scanned',
-      description: `Looking up product...`,
-    });
-
-    try {
-      const product = await barcodeProductLookup({ barcode: barcodeText });
-      onScan(product);
-      onClose(); // Close after successful scan and lookup
-    } catch (error) {
-      console.error('Product lookup failed:', error);
-      toast({
-        title: 'Product Not Found',
-        description: 'Could not find a product for the scanned barcode.',
-        variant: 'destructive',
-      });
-      // Reset for next scan attempt, in case the modal doesn't close
-      isProcessingRef.current = false;
-    }
-  }, [onScan, onClose, toast]);
-  
-  // Effect for initializing devices
+  // Effect for initializing devices and the code reader
   useEffect(() => {
+    const hints = new Map();
+    const formats = [10, 11, 1, 2, 4, 7, 8, 9, 12, 13, 14, 15, 16, 17, 18, 19];
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
+    codeReaderRef.current = new BrowserMultiFormatReader(hints);
+
     let isMounted = true;
     const getDevices = async () => {
       try {
-        // First, ensure we have permission
         await navigator.mediaDevices.getUserMedia({ video: true });
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoInputDevices = devices.filter(device => device.kind === 'videoinput');
 
         if (isMounted && videoInputDevices.length > 0) {
           setVideoDevices(videoInputDevices);
-          // Prefer environment (back) camera
           const backCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back'));
           setSelectedDeviceId(backCamera?.deviceId || videoInputDevices[0].deviceId);
         } else if (isMounted) {
-            toast({
-              title: 'No Camera Found',
-              description: 'Could not find any video devices.',
-              variant: 'destructive'
-            });
-            onClose();
+          toast({ title: 'No Camera Found', description: 'Could not find any video devices.', variant: 'destructive' });
+          onClose();
         }
       } catch (error) {
         console.error("Could not get video devices.", error);
-        toast({
-            title: 'Camera Error',
-            description: 'Could not access camera. Please ensure permissions are granted.',
-            variant: 'destructive'
-        });
+        toast({ title: 'Camera Error', description: 'Could not access camera. Please ensure permissions are granted.', variant: 'destructive' });
         onClose();
       }
     };
     
     getDevices();
 
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [onClose, toast]);
 
 
   // Effect for starting/stopping the scanner
   useEffect(() => {
-    if (!selectedDeviceId || !videoRef.current) {
+    if (!selectedDeviceId || !videoRef.current || !codeReaderRef.current) {
       return;
     }
 
     const codeReader = codeReaderRef.current;
     let isMounted = true;
+    isProcessingRef.current = false; // Reset processing flag
 
     const startScanning = async () => {
-        isProcessingRef.current = false; // Reset processing flag
         try {
             await codeReader.decodeFromVideoDevice(
               selectedDeviceId,
               videoRef.current,
               (result, err) => {
-                if (!isMounted) return;
+                if (!isMounted || isProcessingRef.current) return;
 
                 if (result) {
-                    processBarcode(result.getText());
+                    isProcessingRef.current = true;
+                    onScan(result.getText());
+                    // onClose is called by the parent component after handling the scan
                 }
                 
-                if (err && !(err instanceof NotFoundException)) {
+                if (err && !(err instanceof NotFoundException) && !(err instanceof DOMException)) {
                     console.error('Barcode decoding error:', err);
+                    toast({
+                        title: 'Scanning Error',
+                        description: 'An error occurred during scanning.',
+                        variant: 'destructive'
+                    });
                 }
               }
             );
         } catch (startError) {
             console.error('Error starting scanner:', startError);
-             toast({
-                title: 'Scanner Start Error',
-                description: 'Failed to initialize the scanner with the selected camera.',
-                variant: 'destructive'
-             });
-            onClose();
+            if(isMounted) {
+                 toast({
+                    title: 'Scanner Start Error',
+                    description: 'Failed to initialize the scanner. The camera might be in use by another application.',
+                    variant: 'destructive'
+                 });
+                onClose();
+            }
         }
     };
 
@@ -131,9 +107,12 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     // Cleanup function
     return () => {
         isMounted = false;
-        codeReader.reset(); // This properly stops the decoding and releases the camera
+        isProcessingRef.current = true; // prevent any pending callbacks from firing
+        if (codeReader) {
+          codeReader.reset(); 
+        }
     };
-  }, [selectedDeviceId, processBarcode, onClose, toast]);
+  }, [selectedDeviceId, onScan, onClose, toast]);
   
 
   const handleSwitchCamera = () => {
@@ -155,7 +134,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           <video
             ref={videoRef}
             className="w-full h-full object-cover"
-            playsInline // Important for iOS
+            playsInline
             autoPlay
             muted
           />
