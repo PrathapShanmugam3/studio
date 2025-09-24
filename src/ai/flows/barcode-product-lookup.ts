@@ -36,9 +36,9 @@ const barcodeProductLookupPrompt = ai.definePrompt({
   prompt: `You are a product identifier. Given a barcode, you will identify the product
   and return its details in JSON format. The barcode is: {{{barcode}}}.
 
-  If you can identify a real-world product, return its actual details. If you cannot find an exact match, generate realistic, representative product data for a plausible product that might have that barcode. For example, if the barcode looks like it could be for a food item, invent a food item. Do not state that the product was not found.
+  If you can identify a real-world product, return its actual details. If you cannot find an exact match, you MUST generate realistic, representative product data for a plausible product that might have that barcode. For example, if the barcode looks like it could be for a food item, invent a food item. Do not state that the product was not found.
 
-  Ensure the JSON response includes:
+  You MUST ensure the JSON response includes a value for every field:
   - productName: The name of the product.
   - productId: A unique identifier for the product.
   - description: A detailed description of the product.

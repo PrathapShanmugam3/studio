@@ -34,6 +34,7 @@ export default function SellPage() {
 
     const handleProductScanned = (product: BarcodeProductLookupOutput) => {
         setScannedItems(prevItems => [...prevItems, {...product, scanId: Date.now()}]);
+        setIsScanning(false);
         toast({
             title: "Product Added",
             description: `${product.productName} has been added to the sale.`,
@@ -56,7 +57,7 @@ export default function SellPage() {
         });
     };
 
-    const totalAmount = scannedItems.reduce((total, item) => total + item.price, 0);
+    const totalAmount = scannedItems.reduce((total, item) => total + (item.price || 0), 0);
 
     return (
         <>
@@ -92,7 +93,7 @@ export default function SellPage() {
                                             <p className="font-medium">{item.productName}</p>
                                             <p className="text-sm text-muted-foreground line-clamp-1">{item.description}</p>
                                         </div>
-                                        <p className="font-semibold">${item.price.toFixed(2)}</p>
+                                        <p className="font-semibold">${(item.price || 0).toFixed(2)}</p>
                                         <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleRemoveItem(item.scanId)}>
                                             <Trash2 className="w-4 h-4" />
                                         </Button>
