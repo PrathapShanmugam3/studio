@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { Barcode, DollarSign, Loader2, PlusCircle, ScanLine, ShoppingCart, Trash2, X } from 'lucide-react';
+import { DollarSign, Loader2, PlusCircle, ScanLine, ShoppingCart, Trash2, X } from 'lucide-react';
 
 import { BarcodeScanner } from '@/components/barcode-scanner';
 import { Button } from '@/components/ui/button';

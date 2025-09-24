@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -21,9 +20,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   // Use refs for instances that should not trigger re-renders
   const codeReaderRef = useRef(new BrowserMultiFormatReader());
   const controlsRef = useRef<IScannerControls | null>(null);
-  const lastScanTimeRef = useRef(0);
   const isProcessingRef = useRef(false);
-  const SCAN_INTERVAL = 200; // ms
 
   // Effect for initializing and enumerating video devices
   useEffect(() => {
@@ -31,33 +28,40 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     const getDevices = async () => {
       try {
         // First, ensure we have permission by asking for a stream.
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        // Stop the tracks immediately, we just needed permission.
-        stream.getTracks().forEach(track => track.stop());
-
+        await navigator.mediaDevices.getUserMedia({ video: true });
+        
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoInputDevices = devices.filter(device => device.kind === 'videoinput');
 
-        if (isMounted && videoInputDevices.length > 0) {
-          setVideoDevices(videoInputDevices);
-          // Prefer the back camera ('environment') if available
-          const backCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back')) || 
-                             videoInputDevices.find(device => device.label.toLowerCase().includes('environment'));
-          setSelectedDeviceId(backCamera?.deviceId || videoInputDevices[0].deviceId);
-        } else if (isMounted) {
-          toast({ title: 'No Camera Found', description: 'Could not find any video devices.', variant: 'destructive' });
-          onClose();
+        if (isMounted) {
+          if (videoInputDevices.length > 0) {
+            setVideoDevices(videoInputDevices);
+            // Prefer the back camera ('environment') if available
+            const backCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back')) || 
+                               videoInputDevices.find(device => device.label.toLowerCase().includes('environment'));
+            setSelectedDeviceId(backCamera?.deviceId || videoInputDevices[0].deviceId);
+          } else {
+            toast({ title: 'No Camera Found', description: 'Could not find any video devices.', variant: 'destructive' });
+            onClose();
+          }
         }
       } catch (error) {
         console.error("Could not get video devices.", error);
         toast({ title: 'Camera Error', description: 'Could not access camera. Please ensure permissions are granted.', variant: 'destructive' });
-        onClose();
+        if (isMounted) onClose();
       }
     };
     
     getDevices();
 
-    return () => { isMounted = false; };
+    return () => { 
+      isMounted = false; 
+      // Ensure any running stream is stopped when the component unmounts for any reason
+      if (controlsRef.current) {
+        controlsRef.current.stop();
+        controlsRef.current = null;
+      }
+    };
   }, [onClose, toast]);
 
 
@@ -71,41 +75,36 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     let isMounted = true;
     isProcessingRef.current = false;
 
-    const constraints = {
-        video: {
-            deviceId: { exact: selectedDeviceId },
-            width: { ideal: 640 },
-            height: { ideal: 480 },
-        },
-    };
+    // Stop any existing stream before starting a new one
+    if (controlsRef.current) {
+      controlsRef.current.stop();
+    }
 
     const startScanning = async () => {
         try {
-            const controls = await codeReader.decodeFromConstraints(
-              { video: constraints.video },
+            const newControls = await codeReader.decodeFromVideoDevice(
+              selectedDeviceId,
               videoRef.current,
               (result, err) => {
                 if (!isMounted || isProcessingRef.current) return;
                 
-                const now = Date.now();
-                if (result && (now - lastScanTimeRef.current > SCAN_INTERVAL)) {
-                    lastScanTimeRef.current = now;
-                    isProcessingRef.current = true; // Set flag to prevent further scans
+                if (result) {
+                    isProcessingRef.current = true;
                     onScan(result.getText());
-                    // The parent component will call onClose, which triggers cleanup.
+                    // The parent component is now responsible for closing the scanner.
                 }
                 
-                if (err && !(err instanceof NotFoundException) && !(err instanceof DOMException)) {
+                if (err && !(err instanceof NotFoundException)) {
                     console.error('Barcode decoding error:', err);
-                    toast({
-                        title: 'Scanning Error',
-                        description: 'An error occurred during scanning.',
-                        variant: 'destructive'
-                    });
                 }
               }
             );
-            controlsRef.current = controls;
+            if (isMounted) {
+              controlsRef.current = newControls;
+            } else {
+              // If component unmounted while starting, stop the new stream
+              newControls.stop();
+            }
         } catch (startError) {
             console.error('Error starting scanner:', startError);
             if(isMounted) {
@@ -151,9 +150,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           <video
             ref={videoRef}
             className="w-full h-full object-cover"
-            playsInline
-            autoPlay
-            muted
+            playsInline // Important for iOS
           />
            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="w-3/4 h-1/2 border-2 border-primary/70 rounded-lg shadow-[0_0_15px_5px_rgba(0,0,0,0.5)]" />
