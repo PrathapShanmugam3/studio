@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
+import { BrowserMultiFormatReader, NotFoundException, Exception, Result } from '@zxing/library';
 import { Camera, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -12,7 +12,6 @@ interface BarcodeScannerProps {
   onClose: () => void;
 }
 
-// The controls object returned by zxing has a `stop()` method.
 type ScannerControls = {
   stop: () => void;
 };
@@ -24,6 +23,8 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
   const codeReaderRef = useRef(new BrowserMultiFormatReader());
   const controlsRef = useRef<ScannerControls | null>(null);
+  const isProcessingRef = useRef(false);
+  const lastScanTimeRef = useRef(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -58,7 +59,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
     return () => {
       isMounted = false;
-      // Cleanup when the component unmounts
+      // Ensure cleanup happens when component unmounts
       if (controlsRef.current) {
         controlsRef.current.stop();
         controlsRef.current = null;
@@ -72,46 +73,54 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     }
 
     const codeReader = codeReaderRef.current;
-    let isProcessing = false;
+    isProcessingRef.current = false;
 
-    // Stop any existing scanner before starting a new one
-    if (controlsRef.current) {
-      controlsRef.current.stop();
-    }
+    const constraints = {
+        video: {
+            deviceId: selectedDeviceId,
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+        },
+    };
 
     const startScanning = async () => {
-      try {
-        const newControls = await codeReader.decodeFromVideoDevice(
-          selectedDeviceId,
-          videoRef.current,
-          (result, err) => {
-            if (result && !isProcessing) {
-              isProcessing = true;
-              onScan(result.getText());
-            }
-            if (err && !(err instanceof NotFoundException)) {
-              console.error('Barcode decoding error:', err);
-            }
-          }
-        );
-        controlsRef.current = newControls;
-      } catch (startError) {
-        console.error('Error starting scanner:', startError);
-        toast({
-          title: 'Scanner Start Error',
-          description: 'Failed to initialize the scanner. The camera might be in use by another application.',
-          variant: 'destructive'
-        });
-        onClose();
-      }
+        try {
+            const controls = await codeReader.decodeFromConstraints(
+                { video: constraints.video },
+                videoRef.current,
+                (result: Result | undefined, err: Exception | undefined) => {
+                    if (result && !isProcessingRef.current) {
+                        const now = Date.now();
+                        const SCAN_INTERVAL = 200;
+                        if (now - lastScanTimeRef.current > SCAN_INTERVAL) {
+                            lastScanTimeRef.current = now;
+                            isProcessingRef.current = true;
+                            onScan(result.getText());
+                        }
+                    }
+                    if (err && !(err instanceof NotFoundException)) {
+                        console.error('Barcode decoding error:', err);
+                    }
+                }
+            );
+            controlsRef.current = controls;
+        } catch (startError) {
+            console.error('Error starting scanner:', startError);
+            toast({
+                title: 'Scanner Start Error',
+                description: 'Failed to initialize the scanner. The camera might be in use by another application.',
+                variant: 'destructive'
+            });
+            onClose();
+        }
     };
 
     startScanning();
     
-    // Cleanup when the selected device changes
     return () => {
         if (controlsRef.current) {
             controlsRef.current.stop();
+            controlsRef.current = null;
         }
     }
 
