@@ -6,7 +6,6 @@ import { BrowserMultiFormatReader, NotFoundException, Exception, Result } from '
 import { Camera, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Label } from '@/components/ui/label';
 
 interface BarcodeScannerProps {
   onScan: (text: string) => void;
@@ -28,7 +27,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const controlsRef = useRef<ScannerControls | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // 🔹 Get available cameras
+  // Get available cameras
   useEffect(() => {
     let isMounted = true;
     const getCameraDevices = async () => {
@@ -81,7 +80,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   }, [onClose, toast]);
 
 
-  // 🔹 Start/Stop scanner when device changes
+  // Start/Stop scanner when device changes
   useEffect(() => {
     if (!selectedDeviceId || !videoRef.current) {
       return;
@@ -117,7 +116,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             streamRef.current = stream;
             
             const videoTrack = stream.getVideoTracks()[0];
-            const capabilities = videoTrack.getCapabilities();
+            const capabilities = videoTrack.getCapabilities() as any;
 
             if (capabilities.zoom) {
               const zoomMin = capabilities.zoom.min;
@@ -153,8 +152,8 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
                         setLoading(true);
                         setTimeout(() => {
                             onScan(scannedText);
-                            isProcessing = false;
-                            setLoading(false);
+                            // Do not set isProcessing back to false or loading to false,
+                            // as the component will be closed.
                         }, 500);
                     }
                 }
