@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader, NotFoundException, Exception, Result } from '@zxing/library';
+import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
 import { Camera, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -132,7 +132,8 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
 
             videoRef.current.srcObject = stream;
-            await videoRef.current.play();
+            // It is not necessary to call play, decodeFromVideoElement will do it
+            // await videoRef.current.play(); 
 
             const codeReader = codeReaderRef.current;
             
@@ -154,7 +155,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
                                 onScan(scannedText);
                                 // Do not set isProcessing back to false or loading to false,
                                 // as the component will be closed.
-                            }, 500);
+                            }, 500); // A small delay to show "Processing..."
                         } else {
                            requestAnimationFrame(decodeContinuously);
                         }
@@ -175,7 +176,9 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
                 stop: () => {
                     isProcessing = true; // Stop any further processing
                     codeReader.reset();
-                    stream.getTracks().forEach(track => track.stop());
+                    if (stream) {
+                      stream.getTracks().forEach(track => track.stop());
+                    }
                 }
             };
 
