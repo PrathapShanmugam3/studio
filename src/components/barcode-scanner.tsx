@@ -124,7 +124,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
               // Apply 40% zoom
               const zoomValue = zoomMin + (zoomMax - zoomMin) * 0.4;
               try {
-                await videoTrack.applyConstraints({ advanced: [{ zoom: zoomValue }] });
+                await videoTrack.applyConstraints({ advanced: [{ zoom: zoomValue }] } as any);
               } catch (zoomError) {
                 console.error("Failed to apply zoom", zoomError);
               }
