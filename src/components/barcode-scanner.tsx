@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader, NotFoundException, IScannerControls } from '@zxing/library';
+import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
 import { Camera, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -12,26 +12,33 @@ interface BarcodeScannerProps {
   onClose: () => void;
 }
 
+// The controls object returned by zxing has a `stop()` method.
+type ScannerControls = {
+  stop: () => void;
+};
+
 export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const { toast } = useToast();
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
   const codeReaderRef = useRef(new BrowserMultiFormatReader());
-  const controlsRef = useRef<IScannerControls | null>(null);
+  const controlsRef = useRef<ScannerControls | null>(null);
 
   useEffect(() => {
     let isMounted = true;
 
     const initializeScanner = async () => {
       try {
-        await navigator.mediaDevices.getUserMedia({ video: true }); // Request permission first
+        // We need to ask for permission first to be able to enumerate devices.
+        await navigator.mediaDevices.getUserMedia({ video: true }); 
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoInputDevices = devices.filter(device => device.kind === 'videoinput');
 
         if (isMounted) {
           if (videoInputDevices.length > 0) {
             setVideoDevices(videoInputDevices);
+            // Prefer the back camera
             const backCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back')) || 
                                videoInputDevices.find(device => device.label.toLowerCase().includes('environment'));
             setSelectedDeviceId(backCamera?.deviceId || videoInputDevices[0].deviceId);
@@ -51,7 +58,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
     return () => {
       isMounted = false;
-      // This is the critical cleanup part
+      // Cleanup when the component unmounts
       if (controlsRef.current) {
         controlsRef.current.stop();
         controlsRef.current = null;
@@ -67,7 +74,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     const codeReader = codeReaderRef.current;
     let isProcessing = false;
 
-    // Stop any previous scanner before starting a new one
+    // Stop any existing scanner before starting a new one
     if (controlsRef.current) {
       controlsRef.current.stop();
     }
@@ -101,7 +108,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
     startScanning();
     
-    // The main cleanup is in the first useEffect, but we can also stop here just in case.
+    // Cleanup when the selected device changes
     return () => {
         if (controlsRef.current) {
             controlsRef.current.stop();
@@ -144,9 +151,8 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             Cancel
           </Button>
           {videoDevices.length > 1 && (
-            <Button variant="ghost" size="icon" onClick={handleSwitchCamera}>
+            <Button variant="ghost" size="icon" onClick={handleSwitchCamera} aria-label="Switch Camera">
               <Camera className="w-5 h-5" />
-              <span className="sr-only">Switch Camera</span>
             </Button>
           )}
         </div>
