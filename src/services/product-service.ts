@@ -1,9 +1,10 @@
 
-import type { Product, ApiProduct } from '@/lib/types';
-import { ApiService } from './api-service';
+import type { Product, ApiProduct, ApiResponse } from '@/lib/types';
+import { ApiService, ApiServiceError } from './api-service';
 
 // Helper to check if a URL is valid
 function isValidHttpUrl(string: string) {
+  if (!string) return false;
   let url;
   try {
     url = new URL(string);
@@ -50,43 +51,47 @@ function toApiProduct(product: Partial<Product>): any {
 
 export class ProductService {
   static async getProducts(): Promise<Product[]> {
-    const data = await ApiService.get<ApiProduct[]>('/all');
-    return data.map(fromApiProduct);
+    const response = await ApiService.get<ApiProduct[]>('/all');
+    return response.responseContent.map(fromApiProduct);
   }
 
   static async getProductById(id: string): Promise<Product | null> {
     try {
-      const data = await ApiService.get<ApiProduct>(`/${id}`);
-      return fromApiProduct(data);
+      const response = await ApiService.get<ApiProduct>(`/${id}`);
+      return fromApiProduct(response.responseContent);
     } catch (error) {
+      if (error instanceof ApiServiceError && error.status === 404) {
+        return null;
+      }
       console.error(`Failed to fetch product with id ${id}:`, error);
-      return null;
+      throw error;
     }
   }
 
-  static async createProduct(productData: Omit<Product, 'id'>): Promise<Product> {
+  static async createProduct(productData: Omit<Product, 'id'>): Promise<ApiResponse<ApiProduct>> {
     const apiPayload = toApiProduct(productData);
-    const data = await ApiService.post<ApiProduct>('/addProduct', apiPayload);
-    return fromApiProduct(data);
+    const response = await ApiService.post<ApiProduct>('/addProduct', apiPayload);
+    return response;
   }
 
-  static async updateProduct(id: string, productData: Partial<Omit<Product, 'id'>>): Promise<Product | null> {
+  static async updateProduct(id: string, productData: Partial<Omit<Product, 'id'>>): Promise<ApiResponse<ApiProduct>> {
     const apiPayload = toApiProduct(productData);
     try {
-      // The API expects the ID in the URL, not the body for updates.
-      const data = await ApiService.put<ApiProduct>(`/update/${id}`, { ...apiPayload, id: undefined });
-      return fromApiProduct(data);
+      const response = await ApiService.put<ApiProduct>(`/update/${id}`, { ...apiPayload, id: undefined });
+      return response;
     } catch (error) {
       console.error(`Failed to update product with id ${id}:`, error);
-      return null;
+      throw error;
     }
   }
 
-  static async deleteProduct(id: string): Promise<void> {
+  static async deleteProduct(id: string): Promise<ApiResponse<null>> {
     try {
-      await ApiService.delete(`/delete/${id}`);
+      const response = await ApiService.delete<null>(`/delete/${id}`);
+      return response;
     } catch (error) {
       console.error(`Failed to delete product with id ${id}:`, error);
+      throw error;
     }
   }
 }

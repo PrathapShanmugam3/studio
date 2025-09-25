@@ -1,3 +1,4 @@
+
 import Image from 'next/image';
 import Link from 'next/link';
 import { MoreHorizontal, PlusCircle } from 'lucide-react';
@@ -25,19 +26,9 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { deleteProduct } from '@/lib/actions';
 import { ProductService } from '@/services/product-service';
+import { DeleteProductButton } from './components/delete-product-button';
 
-function DeleteProductForm({ productId }: { productId: string }) {
-    return (
-        <form action={deleteProduct}>
-            <input type="hidden" name="productId" value={productId} />
-            <button type="submit" className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm text-destructive outline-none transition-colors hover:bg-destructive/10 focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50">
-                Delete
-            </button>
-        </form>
-    );
-}
 
 export default async function ProductsAdminPage() {
   const products = await ProductService.getProducts();
@@ -118,9 +109,7 @@ export default async function ProductsAdminPage() {
                       <DropdownMenuItem asChild>
                          <Link href={`/admin/products/edit/${product.id}`} prefetch={false}>Edit</Link>
                       </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <DeleteProductForm productId={product.id} />
-                      </DropdownMenuItem>
+                      <DeleteProductButton productId={product.id} />
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>

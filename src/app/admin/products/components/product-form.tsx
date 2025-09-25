@@ -22,10 +22,11 @@ import { Textarea } from '@/components/ui/textarea';
 import type { Product } from '@/lib/types';
 import { createProduct, updateProduct } from '@/lib/actions';
 import { BarcodeScanner } from '@/components/barcode-scanner';
+import { useToast } from '@/hooks/use-toast';
 
 const ProductFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  description: z.string().min(1, 'Description is required'),
+  description: z.string().optional(),
   price: z.coerce.number().min(0, 'Price must be non-negative'),
   wholesalePrice: z.coerce.number().min(0, "Wholesale price must be non-negative").optional(),
   retailPrice: z.coerce.number().min(0, "Retail price must be non-negative").optional(),
@@ -43,6 +44,7 @@ interface ProductFormProps {
 
 export function ProductForm({ product }: ProductFormProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const [isScanning, setIsScanning] = useState(false);
 
   const {
@@ -74,7 +76,7 @@ export function ProductForm({ product }: ProductFormProps) {
     const formData = new FormData();
     // Manually build formData to ensure correct types and format
     formData.append('name', data.name);
-    formData.append('description', data.description);
+    if(data.description) formData.append('description', data.description);
     formData.append('price', String(data.price));
     formData.append('stock', String(data.stock));
     formData.append('image', data.image);
@@ -83,11 +85,26 @@ export function ProductForm({ product }: ProductFormProps) {
     if (data.barcode) formData.append('barcode', data.barcode);
     if (data.expiryDate) formData.append('expiryDate', new Date(data.expiryDate).toISOString());
 
+    let result;
     if (product) {
       formData.append('id', product.id);
-      await updateProduct(formData);
+      result = await updateProduct(formData);
     } else {
-      await createProduct(formData);
+      result = await createProduct(formData);
+    }
+
+    if (result.success && result.message) {
+      toast({
+        title: 'Success!',
+        description: result.message,
+      });
+      router.push('/admin/products');
+    } else if (result.error) {
+       toast({
+        title: 'Error',
+        description: result.error,
+        variant: 'destructive',
+      });
     }
   };
 

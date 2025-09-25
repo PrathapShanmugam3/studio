@@ -2,14 +2,14 @@ import type { ApiResponse } from '@/lib/types';
 
 const API_BASE_URL = 'https://thirumalaimaligai.onrender.com/product/api';
 
-class ApiServiceError extends Error {
+export class ApiServiceError extends Error {
   constructor(message: string, public status: number) {
     super(message);
     this.name = 'ApiServiceError';
   }
 }
 
-async function handleResponse<T>(response: Response): Promise<T> {
+async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
   const data: ApiResponse<T> = await response.json();
 
   if (!response.ok || data.statusCode !== 0) {
@@ -18,11 +18,10 @@ async function handleResponse<T>(response: Response): Promise<T> {
     throw new ApiServiceError(errorMessage, response.status);
   }
   
-  // The actual content is nested in responseContent
-  return data.responseContent;
+  return data;
 }
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
   const url = `${API_BASE_URL}${endpoint}`;
   const config: RequestInit = {
     ...options,
@@ -38,22 +37,22 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export const ApiService = {
-  get: <T>(endpoint: string): Promise<T> => {
+  get: <T>(endpoint: string): Promise<ApiResponse<T>> => {
     return request<T>(endpoint, { method: 'GET' });
   },
-  post: <T>(endpoint: string, body: any): Promise<T> => {
+  post: <T>(endpoint: string, body: any): Promise<ApiResponse<T>> => {
     return request<T>(endpoint, {
       method: 'POST',
       body: JSON.stringify(body),
     });
   },
-  put: <T>(endpoint: string, body: any): Promise<T> => {
+  put: <T>(endpoint: string, body: any): Promise<ApiResponse<T>> => {
     return request<T>(endpoint, {
       method: 'PUT',
       body: JSON.stringify(body),
     });
   },
-  delete: <T>(endpoint: string): Promise<T> => {
+  delete: <T>(endpoint: string): Promise<ApiResponse<T>> => {
     return request<T>(endpoint, { method: 'DELETE' });
   },
 };

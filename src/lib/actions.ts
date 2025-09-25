@@ -33,7 +33,7 @@ export async function placeOrder(cartItems: any) {
 const ProductSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, "Name is required"),
-  description: z.string().min(1, "Description is required"),
+  description: z.string().optional(),
   price: z.coerce.number().min(0, "Price must be non-negative"),
   wholesalePrice: z.coerce.number().min(0, "Wholesale price must be non-negative").optional(),
   retailPrice: z.coerce.number().min(0, "Retail price must be non-negative").optional(),
@@ -43,39 +43,57 @@ const ProductSchema = z.object({
   expiryDate: z.string().optional(),
 });
 
-export async function createProduct(formData: FormData) {
+type ActionResult = {
+    success: boolean;
+    message?: string;
+    error?: string;
+}
+
+export async function createProduct(formData: FormData): Promise<ActionResult> {
     const validatedFields = ProductSchema.safeParse(Object.fromEntries(formData.entries()));
 
     if (!validatedFields.success) {
-        // Handle validation errors
         console.error(validatedFields.error);
-        return { error: "Invalid data" };
+        return { success: false, error: "Invalid data submitted." };
     }
 
-    await ProductService.createProduct(validatedFields.data);
-    
-    revalidatePath('/admin/products');
-    redirect('/admin/products');
+    try {
+        const result = await ProductService.createProduct(validatedFields.data);
+        revalidatePath('/admin/products');
+        return { success: true, message: result.message };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to create product." };
+    }
 }
 
-export async function updateProduct(formData: FormData) {
+export async function updateProduct(formData: FormData): Promise<ActionResult> {
     const validatedFields = ProductSchema.safeParse(Object.fromEntries(formData.entries()));
 
     if (!validatedFields.success || !validatedFields.data.id) {
         console.error(validatedFields.error);
-        return { error: "Invalid data" };
+        return { success: false, error: "Invalid data for update." };
     }
     
-    const { id, ...productData } = validatedFields.data;
-    await ProductService.updateProduct(id, productData);
-
-    revalidatePath('/admin/products');
-    revalidatePath(`/admin/products/edit/${id}`);
-    redirect('/admin/products');
+    try {
+        const { id, ...productData } = validatedFields.data;
+        const result = await ProductService.updateProduct(id, productData);
+        revalidatePath('/admin/products');
+        revalidatePath(`/admin/products/edit/${id}`);
+        return { success: true, message: result.message };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update product." };
+    }
 }
 
-export async function deleteProduct(formData: FormData) {
-    const id = formData.get('productId') as string;
-    await ProductService.deleteProduct(id);
-    revalidatePath('/admin/products');
+export async function deleteProduct(productId: string): Promise<ActionResult> {
+    if (!productId) {
+        return { success: false, error: "Product ID is missing." };
+    }
+    try {
+        const result = await ProductService.deleteProduct(productId);
+        revalidatePath('/admin/products');
+        return { success: true, message: result.message };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to delete product." };
+    }
 }
