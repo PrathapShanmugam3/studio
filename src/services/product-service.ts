@@ -51,8 +51,15 @@ function toApiProduct(product: Partial<Product>): any {
 
 export class ProductService {
   static async getProducts(): Promise<Product[]> {
-    const response = await ApiService.get<ApiProduct[]>('/all');
-    return response.responseContent.map(fromApiProduct);
+    try {
+      const response = await ApiService.get<ApiProduct[]>('/all');
+      return response.responseContent.map(fromApiProduct);
+    } catch (error) {
+      console.error('Failed to fetch products:', error);
+      // Return an empty array to prevent the app from crashing.
+      // The UI will show that no products are available.
+      return [];
+    }
   }
 
   static async getProductById(id: string): Promise<Product | null> {
