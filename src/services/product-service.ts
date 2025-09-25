@@ -16,17 +16,22 @@ function isValidHttpUrl(string: string) {
 
 
 // Helper to convert API product shape to our app's Product shape
-function fromApiProduct(apiProduct: ApiProduct): Product {
+function fromApiProduct(apiProduct: any): Product {
   const image = isValidHttpUrl(apiProduct.image) 
     ? apiProduct.image 
     : `https://picsum.photos/seed/${apiProduct.id || 'placeholder'}/400/400`;
 
   return {
-    ...apiProduct,
     id: String(apiProduct.id), // Ensure id is a string
+    name: apiProduct.name,
+    description: apiProduct.description || apiProduct.name,
+    price: apiProduct.price,
+    wholesalePrice: apiProduct.wholesalePrice || apiProduct.wholesale_price,
+    retailPrice: apiProduct.retailPrice || apiProduct.retail_price,
     stock: apiProduct.qty,
-    description: apiProduct.name, // Assuming name can be used as description
     image: image,
+    barcode: apiProduct.barcode,
+    expiryDate: apiProduct.expiryDate || apiProduct.expiry_date,
   };
 }
 
@@ -72,6 +77,25 @@ export class ProductService {
       }
       console.error(`Failed to fetch product with id ${id}:`, error);
       throw error;
+    }
+  }
+
+  static async getProductsByBarcode(barcode: string): Promise<Product[]> {
+    try {
+      const payload = {
+        dataCode: "GET_PRODUCT_BY_CODE",
+        placeholderKeyValueMap: {
+          barCode: barcode,
+        },
+      };
+      const response = await ApiService.post<any[]>('/customdata/getdata', payload);
+      if (response.responseContent && Array.isArray(response.responseContent)) {
+        return response.responseContent.map(fromApiProduct);
+      }
+      return [];
+    } catch (error) {
+        console.error('Failed to fetch products by barcode:', error);
+        return [];
     }
   }
 

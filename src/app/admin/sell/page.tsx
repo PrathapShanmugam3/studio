@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -9,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { barcodeProductLookup, type BarcodeProductLookupOutput } from '@/ai/flows/barcode-product-lookup';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -20,8 +20,11 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { ProductService } from '@/services/product-service';
+import type { Product } from '@/lib/types';
+import { ProductSelectionDialog } from './components/product-selection-dialog';
 
-type ScannedItem = BarcodeProductLookupOutput & {
+type ScannedItem = Product & {
     scanId: number;
 };
 
@@ -31,70 +34,59 @@ export default function SellPage() {
     const [isCheckingOut, setIsCheckingOut] = useState(false);
     const [isLookingUp, setIsLookingUp] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
+    const [multipleProducts, setMultipleProducts] = useState<Product[]>([]);
     const { toast } = useToast();
 
-    // const handleBarcodeScanned = async (barcode: string) => {
-    //     setIsScanning(false);
-    //     setIsLookingUp(true);
-
-    //     toast({
-    //         title: 'Barcode Scanned',
-    //         description: `Looking up product for barcode: ${barcode}`,
-    //     });
-
-    //     try {
-    //         // 🔎 call your product lookup service
-    //         const product = await barcodeProductLookup({ barcode });
-
-    //         // ✅ add to cart
-    //         setScannedItems((prevItems) => [
-    //             ...prevItems,
-    //             { ...product, scanId: Date.now() },
-    //         ]);
-
-    //         toast({
-    //             title: "Product Added",
-    //             description: `${product.productName} has been added to the sale.`,
-    //         });
-    //     } catch (error) {
-    //         console.error("Product lookup failed:", error);
-    //         toast({
-    //             title: "Product Not Found",
-    //             description: "Could not find a product for the scanned barcode.",
-    //             variant: "destructive",
-    //         });
-    //     } finally {
-    //         // 🔒 release loader always
-    //         setIsLookingUp(false);
-    //     }
-    // };
-
-
-    const handleBarcodeScanned = async (barcode: string) => {
-        setIsScanning(false);
-
-        // ✅ Directly add scanned barcode to list (no API call)
-        const product = {
-            productId: barcode, // Use barcode as a unique productId
-            productName: `Barcode ${barcode}`,
-            description: "Scanned product (no lookup)",
-            price: 0, // you can later allow editing price
-            imageUrl: "", // default image
-        };
-
+    const addProductToSale = (product: Product) => {
         setScannedItems((prevItems) => [
             ...prevItems,
             { ...product, scanId: Date.now() },
         ]);
+        toast({
+            title: "Product Added",
+            description: `${product.name} has been added to the sale.`,
+        });
+    }
+
+    const handleBarcodeScanned = async (barcode: string) => {
+        setIsScanning(false);
+        setIsLookingUp(true);
 
         toast({
-            title: "Barcode Added",
-            description: `Scanned barcode: ${barcode}`,
+            title: 'Barcode Scanned',
+            description: `Looking up product for barcode: ${barcode}`,
         });
+
+        try {
+            const products = await ProductService.getProductsByBarcode(barcode);
+
+            if (products.length === 0) {
+                toast({
+                    title: "Product Not Found",
+                    description: "Could not find a product for the scanned barcode.",
+                    variant: "destructive",
+                });
+            } else if (products.length === 1) {
+                addProductToSale(products[0]);
+            } else {
+                setMultipleProducts(products);
+            }
+        } catch (error) {
+            console.error("Product lookup failed:", error);
+            toast({
+                title: "Lookup Error",
+                description: "An error occurred while looking up the product.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsLookingUp(false);
+        }
     };
 
-
-
+    const handleProductSelect = (product: Product) => {
+        addProductToSale(product);
+        setMultipleProducts([]);
+    };
 
     const handleRemoveItem = (scanId: number) => {
         setScannedItems(prevItems => prevItems.filter(item => item.scanId !== scanId));
@@ -142,15 +134,15 @@ export default function SellPage() {
                                     {scannedItems.map((item) => (
                                         <div key={item.scanId} className="flex items-center gap-4 p-2 rounded-lg hover:bg-muted/50">
                                             <Image
-                                                src={item.imageUrl}
-                                                alt={item.productName}
+                                                src={item.image}
+                                                alt={item.name}
                                                 width={48}
                                                 height={48}
-                                                className="rounded-md"
+                                                className="rounded-md object-cover"
                                                 data-ai-hint="scanned product"
                                             />
                                             <div className="flex-1">
-                                                <p className="font-medium">{item.productName}</p>
+                                                <p className="font-medium">{item.name}</p>
                                                 <p className="text-sm text-muted-foreground line-clamp-1">{item.description}</p>
                                             </div>
                                             <p className="font-semibold">${(item.price || 0).toFixed(2)}</p>
@@ -223,6 +215,13 @@ export default function SellPage() {
                     onClose={() => setIsScanning(false)}
                 />
             )}
+
+            <ProductSelectionDialog
+                isOpen={multipleProducts.length > 0}
+                products={multipleProducts}
+                onSelect={handleProductSelect}
+                onClose={() => setMultipleProducts([])}
+            />
 
             <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
                 <AlertDialogContent>
