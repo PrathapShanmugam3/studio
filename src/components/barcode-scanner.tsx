@@ -149,7 +149,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
                         if (now - lastScanTime > SCAN_INTERVAL) {
                             lastScanTime = now;
                             isProcessing = true;
-                            const scannedText = result.getText();
+                            const scannedText = result.getText().replace(/\\/g, '');
                             setLoading(true);
                             setTimeout(() => {
                                 onScan(scannedText);
