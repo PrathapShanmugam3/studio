@@ -1,3 +1,4 @@
+
 import type { ApiResponse } from '@/lib/types';
 
 const API_BASE_URL = 'https://thirumalaimaligai.onrender.com/product/api';
@@ -10,10 +11,17 @@ export class ApiServiceError extends Error {
 }
 
 async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
+  if (!response.ok) {
+    const errorText = await response.text();
+    const errorMessage = `HTTP error! status: ${response.status}, message: ${errorText}`;
+    console.error('API Error:', errorMessage);
+    throw new ApiServiceError(errorMessage, response.status);
+  }
+
   const data: ApiResponse<T> = await response.json();
 
-  if (!response.ok || data.statusCode !== 0) {
-    const errorMessage = data.message || data.errorDescription || `HTTP error! status: ${response.status}`;
+  if (data.statusCode !== 0) {
+    const errorMessage = data.message || data.errorDescription || `API returned error status: ${data.statusCode}`;
     console.error('API Error:', data);
     throw new ApiServiceError(errorMessage, response.status);
   }
