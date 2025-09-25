@@ -82,10 +82,11 @@ export class ProductService {
 
   static async getProductsByBarcode(barcode: string): Promise<Product[]> {
     try {
+      const cleanedBarcode = barcode.replace(/\\/g, '');
       const payload = {
         dataCode: "GET_PRODUCT_BY_CODE",
         placeholderKeyValueMap: {
-          barCode: barcode,
+          barCode: cleanedBarcode,
         },
       };
       const response = await ApiService.post<any[]>('/customdata/getdata', payload);
