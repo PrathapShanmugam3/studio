@@ -1,7 +1,7 @@
 
 import type { ApiResponse } from '@/lib/types';
 
-const API_BASE_URL = 'https://thirumalaimaligai.onrender.com/product/api';
+const API_BASE_URL = 'https://thirumalaimaligai.onrender.com/product';
 const API_TIMEOUT = 10000; // 10 seconds
 
 export class ApiServiceError extends Error {
@@ -68,21 +68,27 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
 export const ApiService = {
   get: <T>(endpoint: string): Promise<ApiResponse<T>> => {
-    return request<T>(endpoint, { method: 'GET' });
+    return request<T>(`/api${endpoint}`, { method: 'GET' });
   },
   post: <T>(endpoint: string, body: any): Promise<ApiResponse<T>> => {
-    return request<T>(endpoint, {
+    return request<T>(`/api${endpoint}`, {
       method: 'POST',
       body: JSON.stringify(body),
     });
   },
   put: <T>(endpoint: string, body: any): Promise<ApiResponse<T>> => {
-    return request<T>(endpoint, {
+    return request<T>(`/api${endpoint}`, {
       method: 'PUT',
       body: JSON.stringify(body),
     });
   },
   delete: <T>(endpoint: string): Promise<ApiResponse<T>> => {
-    return request<T>(endpoint, { method: 'DELETE' });
+    return request<T>(`/api${endpoint}`, { method: 'DELETE' });
   },
+  postCustom: <T>(endpoint: string, body: any): Promise<ApiResponse<T>> => {
+    return request<T>(endpoint, { // This method does not prefix with /api
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
 };

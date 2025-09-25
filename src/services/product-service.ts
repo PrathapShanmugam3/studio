@@ -89,7 +89,8 @@ export class ProductService {
           barCode: cleanedBarcode,
         },
       };
-      const response = await ApiService.post<any[]>('/customdata/getdata', payload);
+      // Use the new postCustom method that doesn't add the /api prefix
+      const response = await ApiService.postCustom<any[]>('/customdata/getdata', payload);
       if (response.responseContent && Array.isArray(response.responseContent)) {
         return response.responseContent.map(fromApiProduct);
       }
