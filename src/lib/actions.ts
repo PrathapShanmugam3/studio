@@ -57,6 +57,11 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
         return { success: false, error: "Invalid data submitted." };
     }
 
+    // Sanitize barcode value
+    if (validatedFields.data.barcode) {
+        validatedFields.data.barcode = validatedFields.data.barcode.replace(/\\/g, '');
+    }
+
     try {
         const result = await ProductService.createProduct(validatedFields.data);
         revalidatePath('/admin/products');
@@ -74,6 +79,11 @@ export async function updateProduct(formData: FormData): Promise<ActionResult> {
         return { success: false, error: "Invalid data for update." };
     }
     
+    // Sanitize barcode value
+    if (validatedFields.data.barcode) {
+        validatedFields.data.barcode = validatedFields.data.barcode.replace(/\\/g, '');
+    }
+
     try {
         const { id, ...productData } = validatedFields.data;
         const result = await ProductService.updateProduct(id, productData);
