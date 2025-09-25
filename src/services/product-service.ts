@@ -1,4 +1,5 @@
 
+
 import type { Product, ApiProduct, ApiResponse } from '@/lib/types';
 import { ApiService, ApiServiceError } from './api-service';
 
@@ -86,7 +87,7 @@ export class ProductService {
       const payload = {
         dataCode: "GET_PRODUCT_BY_CODE",
         placeholderKeyValueMap: {
-          barCode: cleanedBarcode,
+          barCode: `'${cleanedBarcode}'`,
         },
       };
       // Use the new postCustom method that doesn't add the /api prefix
