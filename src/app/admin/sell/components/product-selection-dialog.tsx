@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { Product } from '@/lib/types';
+import { format, parseISO } from 'date-fns';
 
 interface ProductSelectionDialogProps {
   isOpen: boolean;
@@ -28,7 +29,7 @@ export function ProductSelectionDialog({
 }: ProductSelectionDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Multiple Products Found</DialogTitle>
           <DialogDescription>
@@ -54,6 +55,11 @@ export function ProductSelectionDialog({
                     <div className="flex-1">
                         <p className="font-medium">{product.name}</p>
                         <p className="text-sm text-muted-foreground">${product.price.toFixed(2)}</p>
+                        {product.expiryDate && (
+                           <p className="text-xs text-muted-foreground">
+                             Exp: {format(parseISO(product.expiryDate), 'MM/dd/yyyy')}
+                           </p>
+                        )}
                     </div>
                      <Button variant="outline" size="sm">Select</Button>
                 </div>
