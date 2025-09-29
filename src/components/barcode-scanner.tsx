@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -18,8 +19,9 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
-  const codeReaderRef = useRef(new BrowserMultiFormatReader());
   const controlsRef = useRef<IScannerControls | null>(null);
+  const codeReaderRef = useRef(new BrowserMultiFormatReader());
+
 
   useEffect(() => {
     let isMounted = true;
@@ -60,7 +62,11 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
     return () => {
       isMounted = false;
-      controlsRef.current?.stop();
+      // Ensure controls are stopped when the component unmounts for any reason
+      if (controlsRef.current) {
+        controlsRef.current.stop();
+        controlsRef.current = null;
+      }
     };
   }, [onClose, toast]);
 
@@ -69,7 +75,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     if (!selectedDeviceId || !videoRef.current) {
       return;
     }
-
+    
     const startScanning = async () => {
         try {
             const videoEl = videoRef.current;
@@ -77,35 +83,26 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             
             const hints = new Map();
             const formats = [
-                BarcodeFormat.QR_CODE,
-                BarcodeFormat.CODE_128,
-                BarcodeFormat.EAN_13,
-                BarcodeFormat.EAN_8,
-                BarcodeFormat.UPC_A,
-                BarcodeFormat.UPC_E,
-                BarcodeFormat.CODE_39,
-                BarcodeFormat.CODE_93,
-                BarcodeFormat.ITF,
-                BarcodeFormat.DATA_MATRIX,
-                BarcodeFormat.AZTEC,
-                BarcodeFormat.PDF_417,
+                BarcodeFormat.QR_CODE, BarcodeFormat.CODE_128, BarcodeFormat.EAN_13,
+                BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+                BarcodeFormat.CODE_39, BarcodeFormat.CODE_93, BarcodeFormat.ITF,
+                BarcodeFormat.DATA_MATRIX, BarcodeFormat.AZTEC, BarcodeFormat.PDF_417,
             ];
             hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
             
-            const codeReader = new BrowserMultiFormatReader(hints);
+            const codeReader = codeReaderRef.current;
+            codeReader.hints = hints;
             
-            controlsRef.current = codeReader.decodeFromVideoElement(videoEl, (result: Result | null, error: Error | null) => {
+            controlsRef.current = await codeReader.decodeFromVideoDevice(selectedDeviceId, videoEl, (result: Result | null, error?: Error) => {
                 if (result) {
                     setLoading(true);
                     onScan(result.getText());
-                    // No need to stop here, the component will unmount
                 }
 
                 if (error && !(error instanceof NotFoundException)) {
                     console.error('Barcode decoding error:', error);
                 }
             });
-            
 
         } catch (startError) {
             console.error('Error starting scanner:', startError);
@@ -120,13 +117,21 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     
     startScanning();
 
+    // This cleanup function is crucial.
     return () => {
-        controlsRef.current?.stop();
+        if (controlsRef.current) {
+            controlsRef.current.stop();
+            controlsRef.current = null;
+        }
     };
   }, [selectedDeviceId, onClose, onScan, toast]);
 
   const handleSwitchCamera = () => {
     if (videoDevices.length > 1 && selectedDeviceId) {
+      if (controlsRef.current) {
+          controlsRef.current.stop();
+          controlsRef.current = null;
+      }
       const currentIndex = videoDevices.findIndex(device => device.deviceId === selectedDeviceId);
       const nextIndex = (currentIndex + 1) % videoDevices.length;
       setSelectedDeviceId(videoDevices[nextIndex].deviceId);
