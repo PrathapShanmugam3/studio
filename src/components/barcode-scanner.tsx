@@ -103,8 +103,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         streamRef.current.getTracks().forEach(track => track.stop());
     }
 
-    let isProcessing = false;
-
     const startScanning = async () => {
         try {
             const videoEl = videoRef.current;
@@ -137,9 +135,8 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             }
             
             const codeReader = codeReaderRef.current;
-            controlsRef.current = await codeReader.decodeFromVideoElement(videoEl, (result, error, controls) => {
-                if (result && !isProcessing) {
-                    isProcessing = true;
+            controlsRef.current = codeReader.decodeFromVideoElement(videoEl, (result, error) => {
+                if (result) {
                     setLoading(true);
                     onScan(result.getText());
                     // No need to stop here, the component will unmount
