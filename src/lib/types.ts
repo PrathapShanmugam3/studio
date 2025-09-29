@@ -23,6 +23,10 @@ export type CartItem = {
   quantity: number;
 };
 
+export type ScannedItem = Product & {
+    quantity: number;
+};
+
 export type Order = {
   id: string;
   items: CartItem[];

@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { DollarSign, Loader2, PlusCircle, ScanLine, ShoppingCart, Trash2, X } from 'lucide-react';
+import { DollarSign, Loader2, PlusCircle, ScanLine, ShoppingCart, Trash2, X, Plus, Minus } from 'lucide-react';
 
 import { BarcodeScanner } from '@/components/barcode-scanner';
 import { Button } from '@/components/ui/button';
@@ -21,12 +21,9 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { ProductService } from '@/services/product-service';
-import type { Product } from '@/lib/types';
+import type { Product, ScannedItem } from '@/lib/types';
 import { ProductSelectionDialog } from './components/product-selection-dialog';
 
-type ScannedItem = Product & {
-    scanId: number;
-};
 
 export default function SellPage() {
     const [isScanning, setIsScanning] = useState(false);
@@ -38,13 +35,38 @@ export default function SellPage() {
     const { toast } = useToast();
 
     const addProductToSale = (product: Product) => {
-        setScannedItems((prevItems) => [
-            ...prevItems,
-            { ...product, scanId: Date.now() },
-        ]);
-        toast({
-            title: "Product Added",
-            description: `${product.name} has been added to the sale.`,
+        setScannedItems((prevItems) => {
+            const existingItemIndex = prevItems.findIndex(
+                (item) =>
+                item.id === product.id &&
+                item.barcode === product.barcode &&
+                item.expiryDate === product.expiryDate
+            );
+
+            if (existingItemIndex > -1) {
+                const updatedItems = [...prevItems];
+                const newQuantity = updatedItems[existingItemIndex].quantity + 1;
+                if (newQuantity <= 100) {
+                    updatedItems[existingItemIndex].quantity = newQuantity;
+                    toast({
+                        title: "Quantity Updated",
+                        description: `${product.name} quantity increased to ${newQuantity}.`,
+                    });
+                } else {
+                     toast({
+                        title: "Quantity Limit",
+                        description: `You cannot add more than 100 units of ${product.name}.`,
+                        variant: 'destructive'
+                    });
+                }
+                return updatedItems;
+            } else {
+                toast({
+                    title: "Product Added",
+                    description: `${product.name} has been added to the sale.`,
+                });
+                return [...prevItems, { ...product, quantity: 1 }];
+            }
         });
     }
 
@@ -88,8 +110,17 @@ export default function SellPage() {
         setMultipleProducts([]);
     };
 
-    const handleRemoveItem = (scanId: number) => {
-        setScannedItems(prevItems => prevItems.filter(item => item.scanId !== scanId));
+    const handleRemoveItem = (productId: string) => {
+        setScannedItems(prevItems => prevItems.filter(item => item.id !== productId));
+    };
+
+    const updateQuantity = (productId: string, newQuantity: number) => {
+        if (newQuantity < 1 || newQuantity > 100) return;
+        setScannedItems(prevItems => 
+            prevItems.map(item => 
+                item.id === productId ? { ...item, quantity: newQuantity } : item
+            )
+        );
     };
 
     const handleCheckout = async () => {
@@ -104,7 +135,7 @@ export default function SellPage() {
         });
     };
 
-    const totalAmount = scannedItems.reduce((total, item) => total + (item.price || 0), 0);
+    const totalAmount = scannedItems.reduce((total, item) => total + (item.price || 0) * item.quantity, 0);
 
     return (
         <>
@@ -132,7 +163,7 @@ export default function SellPage() {
                             ) : (
                                 <div className="space-y-4">
                                     {scannedItems.map((item) => (
-                                        <div key={item.scanId} className="flex items-center gap-4 p-2 rounded-lg hover:bg-muted/50">
+                                        <div key={item.id} className="flex items-center gap-4 p-2 rounded-lg hover:bg-muted/50">
                                             <Image
                                                 src={item.image}
                                                 alt={item.name}
@@ -145,8 +176,17 @@ export default function SellPage() {
                                                 <p className="font-medium">{item.name}</p>
                                                 <p className="text-sm text-muted-foreground line-clamp-1">{item.description}</p>
                                             </div>
-                                            <p className="font-semibold">${(item.price || 0).toFixed(2)}</p>
-                                            <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleRemoveItem(item.scanId)}>
+                                            <div className="flex items-center gap-2">
+                                                <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                                                    <Minus className="w-3 h-3" />
+                                                </Button>
+                                                <span className="font-bold text-center w-8">{item.quantity}</span>
+                                                <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                                                    <Plus className="w-3 h-3" />
+                                                </Button>
+                                            </div>
+                                            <p className="font-semibold w-20 text-right">${((item.price || 0) * item.quantity).toFixed(2)}</p>
+                                            <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleRemoveItem(item.id)}>
                                                 <Trash2 className="w-4 h-4" />
                                             </Button>
                                         </div>
@@ -181,7 +221,7 @@ export default function SellPage() {
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center">
                                     <span className="text-muted-foreground">Items</span>
-                                    <span className="font-semibold">{scannedItems.length}</span>
+                                    <span className="font-semibold">{scannedItems.reduce((sum, item) => sum + item.quantity, 0)}</span>
                                 </div>
                                 <Separator />
                                 <div className="flex justify-between items-center text-xl font-bold">
