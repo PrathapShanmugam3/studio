@@ -45,7 +45,7 @@ const ProductSchema = z.object({
 
 type ActionResult = {
     success: boolean;
-    message?: string;
+    message?: string | null;
     error?: string;
 }
 
@@ -63,7 +63,11 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
     }
 
     try {
-        const result = await ProductService.createProduct(validatedFields.data);
+        const productData = {
+            ...validatedFields.data,
+            description: validatedFields.data.description || validatedFields.data.name,
+        }
+        const result = await ProductService.createProduct(productData);
         revalidatePath('/admin/products');
         return { success: true, message: result.message };
     } catch (e: any) {

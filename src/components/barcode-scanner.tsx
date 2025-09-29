@@ -1,8 +1,8 @@
-
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader, NotFoundException, DecodeHintType, BarcodeFormat, IScannerControls } from '@zxing/library';
+import { BrowserMultiFormatReader, NotFoundException, DecodeHintType, BarcodeFormat, Result } from '@zxing/library';
+import type { IScannerControls } from '@zxing/browser';
 import { Camera, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -135,7 +135,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             }
             
             const codeReader = codeReaderRef.current;
-            controlsRef.current = codeReader.decodeFromVideoElement(videoEl, (result, error) => {
+            controlsRef.current = await codeReader.decodeFromVideoElement(videoEl, (result: Result | null, error: Error | null) => {
                 if (result) {
                     setLoading(true);
                     onScan(result.getText());
