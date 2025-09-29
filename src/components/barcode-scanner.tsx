@@ -135,7 +135,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             }
             
             const codeReader = codeReaderRef.current;
-            controlsRef.current = await codeReader.decodeFromVideoElement(videoEl, (result: Result | null, error: Error | null) => {
+            controlsRef.current = codeReader.decodeFromVideoElement(videoEl, (result: Result | null, error: Error | null) => {
                 if (result) {
                     setLoading(true);
                     onScan(result.getText());
