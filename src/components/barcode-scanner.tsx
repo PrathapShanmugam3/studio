@@ -97,8 +97,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     }
 
     let isProcessing = false;
-    let lastScanTime = 0;
-    const SCAN_INTERVAL = 200; // ms
 
     const startScanning = async () => {
         try {
@@ -137,50 +135,19 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
             const codeReader = codeReaderRef.current;
             
-            const decodeContinuously = () => {
-                if (!videoRef.current || videoRef.current.readyState < 2) {
-                    requestAnimationFrame(decodeContinuously);
-                    return;
+            const controls = await codeReader.decodeFromStream(stream, videoRef.current, (result, error) => {
+                if (result && !isProcessing) {
+                    isProcessing = true;
+                    setLoading(true);
+                    onScan(result.getText());
                 }
-                
-                codeReader.decodeFromVideoElement(videoRef.current).then(result => {
-                    if (result && !isProcessing) {
-                        const now = Date.now();
-                        if (now - lastScanTime > SCAN_INTERVAL) {
-                            lastScanTime = now;
-                            isProcessing = true;
-                            const scannedText = result.getText();
-                            setLoading(true);
-                            setTimeout(() => {
-                                onScan(scannedText);
-                                // Do not set isProcessing back to false or loading to false,
-                                // as the component will be closed.
-                            }, 500); // A small delay to show "Processing..."
-                        } else {
-                           requestAnimationFrame(decodeContinuously);
-                        }
-                    }
-                }).catch(err => {
-                    if (err && !(err instanceof NotFoundException)) {
-                        console.error('Barcode decoding error:', err);
-                    }
-                    if (!isProcessing) {
-                       requestAnimationFrame(decodeContinuously);
-                    }
-                });
-            };
 
-            requestAnimationFrame(decodeContinuously);
-
-            controlsRef.current = {
-                stop: () => {
-                    isProcessing = true; // Stop any further processing
-                    codeReader.reset();
-                    if (stream) {
-                      stream.getTracks().forEach(track => track.stop());
-                    }
+                if (error && !(error instanceof NotFoundException)) {
+                    console.error('Barcode decoding error:', error);
                 }
-            };
+            });
+
+            controlsRef.current = controls;
 
         } catch (startError) {
             console.error('Error starting scanner:', startError);
