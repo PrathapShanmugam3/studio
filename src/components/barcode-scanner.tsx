@@ -92,7 +92,8 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             const codeReader = codeReaderRef.current;
             codeReader.hints = hints;
             
-            controlsRef.current = await codeReader.decodeFromVideoDevice(selectedDeviceId, videoEl, (result: Result | null, error?: Error) => {
+            // This is the correct pattern: decodeFromVideoDevice returns controls when a callback is provided.
+            controlsRef.current = codeReader.decodeFromVideoDevice(selectedDeviceId, videoEl, (result: Result | null, error?: Error) => {
                 if (result) {
                     setLoading(true);
                     onScan(result.getText());
