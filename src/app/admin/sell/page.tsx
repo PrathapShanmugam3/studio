@@ -110,15 +110,15 @@ export default function SellPage() {
         setMultipleProducts([]);
     };
 
-    const handleRemoveItem = (productId: string) => {
-        setScannedItems(prevItems => prevItems.filter(item => item.id !== productId));
+    const handleRemoveItem = (itemId: string) => {
+        setScannedItems(prevItems => prevItems.filter(item => item.id !== itemId));
     };
 
-    const updateQuantity = (productId: string, newQuantity: number) => {
+    const updateQuantity = (itemId: string, newQuantity: number) => {
         if (newQuantity < 1 || newQuantity > 100) return;
         setScannedItems(prevItems => 
             prevItems.map(item => 
-                item.id === productId ? { ...item, quantity: newQuantity } : item
+                item.id === itemId ? { ...item, quantity: newQuantity } : item
             )
         );
     };
