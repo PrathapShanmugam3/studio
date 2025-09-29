@@ -68,7 +68,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
 export const ApiService = {
   get: <T>(endpoint: string): Promise<ApiResponse<T>> => {
-    return request<T>(`/api${endpoint}`, { method: 'GET' });
+    return request<T>(endpoint, { method: 'GET' });
   },
   post: <T>(endpoint: string, body: any): Promise<ApiResponse<T>> => {
     return request<T>(`/api${endpoint}`, {
@@ -77,13 +77,13 @@ export const ApiService = {
     });
   },
   put: <T>(endpoint: string, body: any): Promise<ApiResponse<T>> => {
-    return request<T>(`/api${endpoint}`, {
+    return request<T>(`/update/${body.id}`, {
       method: 'PUT',
       body: JSON.stringify(body),
     });
   },
   delete: <T>(endpoint: string): Promise<ApiResponse<T>> => {
-    return request<T>(`/api${endpoint}`, { method: 'DELETE' });
+    return request<T>(`/delete/${endpoint}`, { method: 'DELETE' });
   },
   postCustom: <T>(endpoint: string, body: any): Promise<ApiResponse<T>> => {
     return request<T>(endpoint, { // This method does not prefix with /api

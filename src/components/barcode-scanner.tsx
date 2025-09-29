@@ -18,27 +18,8 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
-
-  const hints = new Map();
-  const formats = [
-      BarcodeFormat.QR_CODE,
-      BarcodeFormat.CODE_128,
-      BarcodeFormat.EAN_13,
-      BarcodeFormat.EAN_8,
-      BarcodeFormat.UPC_A,
-      BarcodeFormat.UPC_E,
-      BarcodeFormat.CODE_39,
-      BarcodeFormat.CODE_93,
-      BarcodeFormat.ITF,
-      BarcodeFormat.DATA_MATRIX,
-      BarcodeFormat.AZTEC,
-      BarcodeFormat.PDF_417,
-  ];
-  hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
-
-  const codeReaderRef = useRef(new BrowserMultiFormatReader(hints));
+  const codeReaderRef = useRef(new BrowserMultiFormatReader());
   const controlsRef = useRef<IScannerControls | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -79,14 +60,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
     return () => {
       isMounted = false;
-      if (controlsRef.current) {
-        controlsRef.current.stop();
-        controlsRef.current = null;
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-      }
+      controlsRef.current?.stop();
     };
   }, [onClose, toast]);
 
@@ -95,46 +69,31 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     if (!selectedDeviceId || !videoRef.current) {
       return;
     }
-    
-    if (controlsRef.current) {
-        controlsRef.current.stop();
-    }
-    if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-    }
 
     const startScanning = async () => {
         try {
             const videoEl = videoRef.current;
             if (!videoEl) return;
             
-            const constraints: MediaStreamConstraints = {
-                video: {
-                    deviceId: { exact: selectedDeviceId },
-                    width: { ideal: 640 },
-                    height: { ideal: 480 },
-                },
-            };
-
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            streamRef.current = stream;
-            videoEl.srcObject = stream;
+            const hints = new Map();
+            const formats = [
+                BarcodeFormat.QR_CODE,
+                BarcodeFormat.CODE_128,
+                BarcodeFormat.EAN_13,
+                BarcodeFormat.EAN_8,
+                BarcodeFormat.UPC_A,
+                BarcodeFormat.UPC_E,
+                BarcodeFormat.CODE_39,
+                BarcodeFormat.CODE_93,
+                BarcodeFormat.ITF,
+                BarcodeFormat.DATA_MATRIX,
+                BarcodeFormat.AZTEC,
+                BarcodeFormat.PDF_417,
+            ];
+            hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
             
-            const videoTrack = stream.getVideoTracks()[0];
-            const capabilities = videoTrack.getCapabilities() as any;
-
-            if (capabilities.zoom) {
-              const zoomMin = capabilities.zoom.min;
-              const zoomMax = capabilities.zoom.max;
-              const zoomValue = zoomMin + (zoomMax - zoomMin) * 0.4;
-              try {
-                await videoTrack.applyConstraints({ advanced: [{ zoom: zoomValue }] } as any);
-              } catch (zoomError) {
-                console.error("Failed to apply zoom", zoomError);
-              }
-            }
+            const codeReader = new BrowserMultiFormatReader(hints);
             
-            const codeReader = codeReaderRef.current;
             controlsRef.current = codeReader.decodeFromVideoElement(videoEl, (result: Result | null, error: Error | null) => {
                 if (result) {
                     setLoading(true);
@@ -146,6 +105,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
                     console.error('Barcode decoding error:', error);
                 }
             });
+            
 
         } catch (startError) {
             console.error('Error starting scanner:', startError);
@@ -161,14 +121,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     startScanning();
 
     return () => {
-        if (controlsRef.current) {
-            controlsRef.current.stop();
-            controlsRef.current = null;
-        }
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-            streamRef.current = null;
-        }
+        controlsRef.current?.stop();
     };
   }, [selectedDeviceId, onClose, onScan, toast]);
 
