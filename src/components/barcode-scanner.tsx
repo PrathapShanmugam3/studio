@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
+import { BrowserMultiFormatReader, NotFoundException, DecodeHintType, BarcodeFormat } from '@zxing/library';
 import { Camera, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -23,7 +23,25 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
 
-  const codeReaderRef = useRef(new BrowserMultiFormatReader());
+  // Explicitly set all barcode formats to ensure detection
+  const hints = new Map();
+  const formats = [
+      BarcodeFormat.QR_CODE,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.CODE_93,
+      BarcodeFormat.ITF,
+      BarcodeFormat.DATA_MATRIX,
+      BarcodeFormat.AZTEC,
+      BarcodeFormat.PDF_417,
+  ];
+  hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
+
+  const codeReaderRef = useRef(new BrowserMultiFormatReader(hints));
   const controlsRef = useRef<ScannerControls | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -131,7 +149,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
             videoRef.current.srcObject = stream;
             // It is not necessary to call play, decodeFromVideoElement will do it
-            // await videoRef.current.play(); 
 
             const codeReader = codeReaderRef.current;
             
