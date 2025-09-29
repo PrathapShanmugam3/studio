@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader, NotFoundException, DecodeHintType, BarcodeFormat } from '@zxing/library';
+import { BrowserMultiFormatReader, NotFoundException, DecodeHintType, BarcodeFormat, IScannerControls } from '@zxing/library';
 import { Camera, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -12,10 +12,6 @@ interface BarcodeScannerProps {
   onClose: () => void;
 }
 
-type ScannerControls = {
-  stop: () => void;
-};
-
 export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const { toast } = useToast();
@@ -23,7 +19,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
 
-  // Explicitly set all barcode formats to ensure detection
   const hints = new Map();
   const formats = [
       BarcodeFormat.QR_CODE,
@@ -42,10 +37,9 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
 
   const codeReaderRef = useRef(new BrowserMultiFormatReader(hints));
-  const controlsRef = useRef<ScannerControls | null>(null);
+  const controlsRef = useRef<IScannerControls | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Get available cameras
   useEffect(() => {
     let isMounted = true;
     const getCameraDevices = async () => {
@@ -85,7 +79,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
     return () => {
       isMounted = false;
-      // Ensure stream and controls are stopped on unmount
       if (controlsRef.current) {
         controlsRef.current.stop();
         controlsRef.current = null;
@@ -98,27 +91,24 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   }, [onClose, toast]);
 
 
-  // Start/Stop scanner when device changes
   useEffect(() => {
     if (!selectedDeviceId || !videoRef.current) {
       return;
     }
     
-    // Stop previous stream if it exists
     if (controlsRef.current) {
         controlsRef.current.stop();
-        controlsRef.current = null;
     }
     if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
     }
 
     let isProcessing = false;
 
     const startScanning = async () => {
         try {
-            if (!videoRef.current) return;
+            const videoEl = videoRef.current;
+            if (!videoEl) return;
             
             const constraints: MediaStreamConstraints = {
                 video: {
@@ -130,6 +120,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             streamRef.current = stream;
+            videoEl.srcObject = stream;
             
             const videoTrack = stream.getVideoTracks()[0];
             const capabilities = videoTrack.getCapabilities() as any;
@@ -137,7 +128,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             if (capabilities.zoom) {
               const zoomMin = capabilities.zoom.min;
               const zoomMax = capabilities.zoom.max;
-              // Apply 40% zoom
               const zoomValue = zoomMin + (zoomMax - zoomMin) * 0.4;
               try {
                 await videoTrack.applyConstraints({ advanced: [{ zoom: zoomValue }] } as any);
@@ -145,26 +135,20 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
                 console.error("Failed to apply zoom", zoomError);
               }
             }
-
-
-            videoRef.current.srcObject = stream;
-            // It is not necessary to call play, decodeFromVideoElement will do it
-
-            const codeReader = codeReaderRef.current;
             
-            const controls = await codeReader.decodeFromStream(stream, videoRef.current, (result, error) => {
+            const codeReader = codeReaderRef.current;
+            controlsRef.current = await codeReader.decodeFromVideoElement(videoEl, (result, error, controls) => {
                 if (result && !isProcessing) {
                     isProcessing = true;
                     setLoading(true);
                     onScan(result.getText());
+                    // No need to stop here, the component will unmount
                 }
 
                 if (error && !(error instanceof NotFoundException)) {
                     console.error('Barcode decoding error:', error);
                 }
             });
-
-            controlsRef.current = controls;
 
         } catch (startError) {
             console.error('Error starting scanner:', startError);
