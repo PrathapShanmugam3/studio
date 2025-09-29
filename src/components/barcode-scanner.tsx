@@ -1,8 +1,8 @@
+
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader, NotFoundException, DecodeHintType, BarcodeFormat, Result } from '@zxing/library';
-import type { IScannerControls } from '@zxing/browser';
+import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
 import { Camera, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -12,16 +12,22 @@ interface BarcodeScannerProps {
   onClose: () => void;
 }
 
+type ScannerControls = {
+  stop: () => void;
+};
+
 export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const { toast } = useToast();
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
-  const controlsRef = useRef<IScannerControls | null>(null);
+
   const codeReaderRef = useRef(new BrowserMultiFormatReader());
+  const controlsRef = useRef<ScannerControls | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
-
+  // Get available cameras
   useEffect(() => {
     let isMounted = true;
     const getCameraDevices = async () => {
@@ -61,48 +67,120 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
     return () => {
       isMounted = false;
-      // Ensure controls are stopped when the component unmounts for any reason
+      // Ensure stream and controls are stopped on unmount
       if (controlsRef.current) {
         controlsRef.current.stop();
         controlsRef.current = null;
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
       }
     };
   }, [onClose, toast]);
 
 
+  // Start/Stop scanner when device changes
   useEffect(() => {
     if (!selectedDeviceId || !videoRef.current) {
       return;
     }
     
+    // Stop previous stream if it exists
+    if (controlsRef.current) {
+        controlsRef.current.stop();
+        controlsRef.current = null;
+    }
+    if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+    }
+
+    let isProcessing = false;
+    let lastScanTime = 0;
+    const SCAN_INTERVAL = 200; // ms
+
     const startScanning = async () => {
         try {
-            const videoEl = videoRef.current;
-            if (!videoEl) return;
+            if (!videoRef.current) return;
             
-            const hints = new Map();
-            const formats = [
-                BarcodeFormat.QR_CODE, BarcodeFormat.CODE_128, BarcodeFormat.EAN_13,
-                BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
-                BarcodeFormat.CODE_39, BarcodeFormat.CODE_93, BarcodeFormat.ITF,
-                BarcodeFormat.DATA_MATRIX, BarcodeFormat.AZTEC, BarcodeFormat.PDF_417,
-            ];
-            hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
-            
-            const codeReader = codeReaderRef.current;
-            codeReader.hints = hints;
-            
-            // This is the correct pattern: decodeFromVideoDevice returns controls when a callback is provided.
-            controlsRef.current = codeReader.decodeFromVideoDevice(selectedDeviceId, videoEl, (result: Result | null, error?: Error) => {
-                if (result) {
-                    setLoading(true);
-                    onScan(result.getText());
-                }
+            const constraints: MediaStreamConstraints = {
+                video: {
+                    deviceId: { exact: selectedDeviceId },
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                },
+            };
 
-                if (error && !(error instanceof NotFoundException)) {
-                    console.error('Barcode decoding error:', error);
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            streamRef.current = stream;
+            
+            const videoTrack = stream.getVideoTracks()[0];
+            const capabilities = videoTrack.getCapabilities() as any;
+
+            if (capabilities.zoom) {
+              const zoomMin = capabilities.zoom.min;
+              const zoomMax = capabilities.zoom.max;
+              // Apply 40% zoom
+              const zoomValue = zoomMin + (zoomMax - zoomMin) * 0.4;
+              try {
+                await videoTrack.applyConstraints({ advanced: [{ zoom: zoomValue }] } as any);
+              } catch (zoomError) {
+                console.error("Failed to apply zoom", zoomError);
+              }
+            }
+
+
+            videoRef.current.srcObject = stream;
+            // It is not necessary to call play, decodeFromVideoElement will do it
+            // await videoRef.current.play(); 
+
+            const codeReader = codeReaderRef.current;
+            
+            const decodeContinuously = () => {
+                if (!videoRef.current || videoRef.current.readyState < 2) {
+                    requestAnimationFrame(decodeContinuously);
+                    return;
                 }
-            });
+                
+                codeReader.decodeFromVideoElement(videoRef.current).then(result => {
+                    if (result && !isProcessing) {
+                        const now = Date.now();
+                        if (now - lastScanTime > SCAN_INTERVAL) {
+                            lastScanTime = now;
+                            isProcessing = true;
+                            const scannedText = result.getText();
+                            setLoading(true);
+                            setTimeout(() => {
+                                onScan(scannedText);
+                                // Do not set isProcessing back to false or loading to false,
+                                // as the component will be closed.
+                            }, 500); // A small delay to show "Processing..."
+                        } else {
+                           requestAnimationFrame(decodeContinuously);
+                        }
+                    }
+                }).catch(err => {
+                    if (err && !(err instanceof NotFoundException)) {
+                        console.error('Barcode decoding error:', err);
+                    }
+                    if (!isProcessing) {
+                       requestAnimationFrame(decodeContinuously);
+                    }
+                });
+            };
+
+            requestAnimationFrame(decodeContinuously);
+
+            controlsRef.current = {
+                stop: () => {
+                    isProcessing = true; // Stop any further processing
+                    codeReader.reset();
+                    if (stream) {
+                      stream.getTracks().forEach(track => track.stop());
+                    }
+                }
+            };
 
         } catch (startError) {
             console.error('Error starting scanner:', startError);
@@ -117,21 +195,20 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     
     startScanning();
 
-    // This cleanup function is crucial.
     return () => {
         if (controlsRef.current) {
             controlsRef.current.stop();
             controlsRef.current = null;
+        }
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
         }
     };
   }, [selectedDeviceId, onClose, onScan, toast]);
 
   const handleSwitchCamera = () => {
     if (videoDevices.length > 1 && selectedDeviceId) {
-      if (controlsRef.current) {
-          controlsRef.current.stop();
-          controlsRef.current = null;
-      }
       const currentIndex = videoDevices.findIndex(device => device.deviceId === selectedDeviceId);
       const nextIndex = (currentIndex + 1) % videoDevices.length;
       setSelectedDeviceId(videoDevices[nextIndex].deviceId);
