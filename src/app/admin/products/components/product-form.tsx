@@ -69,6 +69,7 @@ export function ProductForm({ product }: ProductFormProps) {
   useEffect(() => {
     const scannedBarcode = searchParams.get('barcode');
     if (scannedBarcode) {
+      alert(`Scanned Barcode: ${scannedBarcode}`);
       setValue('barcode', scannedBarcode, { shouldValidate: true });
       
       // Use URL API to safely remove the barcode parameter

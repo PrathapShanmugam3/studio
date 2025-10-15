@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -73,6 +72,7 @@ export default function SellPageClient() {
     useEffect(() => {
         const scannedBarcode = searchParams.get('barcode');
         if (scannedBarcode && !isLookingUp) {
+            alert(`Scanned Barcode: ${scannedBarcode}`);
             // Use URL API to safely remove the barcode parameter
             const currentUrl = new URL(window.location.href);
             currentUrl.searchParams.delete('barcode');
