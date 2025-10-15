@@ -3,10 +3,10 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ScanLine } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -21,7 +21,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { Product } from '@/lib/types';
 import { createProduct, updateProduct } from '@/lib/actions';
-import { BarcodeScanner } from '@/components/barcode-scanner';
 import { useToast } from '@/hooks/use-toast';
 
 const ProductFormSchema = z.object({
@@ -44,8 +43,8 @@ interface ProductFormProps {
 
 export function ProductForm({ product }: ProductFormProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
-  const [isScanning, setIsScanning] = useState(false);
 
   const {
     register,
@@ -66,11 +65,23 @@ export function ProductForm({ product }: ProductFormProps) {
       expiryDate: product?.expiryDate ? format(parseISO(product.expiryDate), 'yyyy-MM-dd') : '',
     },
   });
+  
+  useEffect(() => {
+    const scannedBarcode = searchParams.get('barcode');
+    if (scannedBarcode) {
+      setValue('barcode', scannedBarcode, { shouldValidate: true });
+      // Remove the barcode from the URL to prevent re-processing
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [searchParams, setValue]);
 
-  const handleBarcodeScanned = (scannedBarcode: string) => {
-    setValue('barcode', scannedBarcode, { shouldValidate: true });
-    setIsScanning(false);
+
+  const openExternalScanner = () => {
+      const returnUrl = encodeURIComponent(window.location.href.split('?')[0]);
+      window.location.href = `microbizscanner://scan?returnUrl=${returnUrl}`;
   };
+
 
   const onSubmit = async (data: ProductFormData) => {
     const formData = new FormData();
@@ -168,7 +179,7 @@ export function ProductForm({ product }: ProductFormProps) {
                     <Label htmlFor="barcode">Barcode</Label>
                      <div className="flex items-center gap-2">
                       <Input id="barcode" {...register('barcode')} />
-                      <Button type="button" variant="outline" size="icon" onClick={() => setIsScanning(true)}>
+                      <Button type="button" variant="outline" size="icon" onClick={openExternalScanner}>
                         <ScanLine className="h-4 w-4" />
                       </Button>
                     </div>
@@ -234,12 +245,6 @@ export function ProductForm({ product }: ProductFormProps) {
           </div>
         </div>
       </form>
-       {isScanning && (
-          <BarcodeScanner
-              onScan={handleBarcodeScanned}
-              onClose={() => setIsScanning(false)}
-          />
-      )}
     </>
   );
 }

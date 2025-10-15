@@ -1,11 +1,11 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { DollarSign, Loader2, PlusCircle, ScanLine, ShoppingCart, Trash2, X, Plus, Minus } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-import { BarcodeScanner } from '@/components/barcode-scanner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -26,13 +26,61 @@ import { ProductSelectionDialog } from './components/product-selection-dialog';
 
 
 export default function SellPage() {
-    const [isScanning, setIsScanning] = useState(false);
+    const router = useRouter();
+    const searchParams = useSearchParams();
+
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
     const [isCheckingOut, setIsCheckingOut] = useState(false);
     const [isLookingUp, setIsLookingUp] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     const [multipleProducts, setMultipleProducts] = useState<Product[]>([]);
     const { toast } = useToast();
+
+    const handleBarcodeScanned = async (barcode: string) => {
+        setIsLookingUp(true);
+
+        toast({
+            title: 'Barcode Scanned',
+            description: `Looking up product for barcode: ${barcode}`,
+        });
+
+        try {
+            const products = await ProductService.getProductsByBarcode(barcode);
+
+            if (products.length === 0) {
+                toast({
+                    title: "Product Not Found",
+                    description: "Could not find a product for the scanned barcode.",
+                    variant: "destructive",
+                });
+            } else if (products.length === 1) {
+                addProductToSale(products[0]);
+            } else {
+                setMultipleProducts(products);
+            }
+        } catch (error) {
+            console.error("Product lookup failed:", error);
+            toast({
+                title: "Lookup Error",
+                description: "An error occurred while looking up the product.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsLookingUp(false);
+        }
+    };
+
+    useEffect(() => {
+        const scannedBarcode = searchParams.get('barcode');
+        if (scannedBarcode && !isLookingUp) {
+            // Remove the barcode from URL to prevent re-triggering
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+
+            handleBarcodeScanned(scannedBarcode);
+        }
+    }, [searchParams]);
+
 
     const addProductToSale = (product: Product) => {
         setScannedItems((prevItems) => {
@@ -70,40 +118,11 @@ export default function SellPage() {
         });
     }
 
-    const handleBarcodeScanned = async (barcode: string) => {
-        setIsScanning(false);
-        setIsLookingUp(true);
-
-        toast({
-            title: 'Barcode Scanned',
-            description: `Looking up product for barcode: ${barcode}`,
-        });
-
-        try {
-            const products = await ProductService.getProductsByBarcode(barcode);
-
-            if (products.length === 0) {
-                toast({
-                    title: "Product Not Found",
-                    description: "Could not find a product for the scanned barcode.",
-                    variant: "destructive",
-                });
-            } else if (products.length === 1) {
-                addProductToSale(products[0]);
-            } else {
-                setMultipleProducts(products);
-            }
-        } catch (error) {
-            console.error("Product lookup failed:", error);
-            toast({
-                title: "Lookup Error",
-                description: "An error occurred while looking up the product.",
-                variant: "destructive",
-            });
-        } finally {
-            setIsLookingUp(false);
-        }
+    const openExternalScanner = () => {
+        const returnUrl = encodeURIComponent(window.location.href.split('?')[0]);
+        window.location.href = `microbizscanner://scan?returnUrl=${returnUrl}`;
     };
+
 
     const handleProductSelect = (product: Product) => {
         addProductToSale(product);
@@ -195,7 +214,7 @@ export default function SellPage() {
                             )}
                         </CardContent>
                         <CardFooter className="flex-col items-stretch gap-2">
-                            <Button size="lg" onClick={() => setIsScanning(true)} disabled={isScanning || isLookingUp}>
+                            <Button size="lg" onClick={openExternalScanner} disabled={isLookingUp}>
                                 <ScanLine className="mr-2 h-5 w-5" />
                                 {scannedItems.length > 0 ? 'Scan Another Product' : 'Start Scanning'}
                             </Button>
@@ -248,13 +267,6 @@ export default function SellPage() {
                     </Card>
                 </div>
             </div>
-
-            {isScanning && (
-                <BarcodeScanner
-                    onScan={handleBarcodeScanned}
-                    onClose={() => setIsScanning(false)}
-                />
-            )}
 
             <ProductSelectionDialog
                 isOpen={multipleProducts.length > 0}
