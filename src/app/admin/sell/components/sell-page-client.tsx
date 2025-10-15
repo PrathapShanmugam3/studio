@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { DollarSign, Loader2, PlusCircle, ScanLine, ShoppingCart, Trash2, X, Plus, Minus } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,7 +26,6 @@ import { ProductSelectionDialog } from './product-selection-dialog';
 
 export default function SellPageClient() {
     const router = useRouter();
-    const searchParams = useSearchParams();
 
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
     const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -70,17 +69,32 @@ export default function SellPageClient() {
     };
 
     useEffect(() => {
-        const scannedBarcode = searchParams.get('barcode');
-        if (scannedBarcode && !isLookingUp) {
-            alert(`Scanned Barcode: ${scannedBarcode}`);
-            // Use URL API to safely remove the barcode parameter
-            const currentUrl = new URL(window.location.href);
-            currentUrl.searchParams.delete('barcode');
-            window.history.replaceState({}, '', currentUrl.toString());
+        const checkBarcode = () => {
+            const params = new URLSearchParams(window.location.search);
+            const scannedBarcode = params.get('barcode');
+            if (scannedBarcode && !isLookingUp) {
+                alert(`Scanned Barcode: ${scannedBarcode}`);
+                
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.delete('barcode');
+                window.history.replaceState({}, '', currentUrl.toString());
 
-            handleBarcodeScanned(scannedBarcode);
-        }
-    }, [searchParams, isLookingUp]);
+                handleBarcodeScanned(scannedBarcode);
+            }
+        };
+
+        checkBarcode(); // Check on initial load
+
+        const handleUrlChange = () => checkBarcode();
+        
+        window.addEventListener('popstate', handleUrlChange);
+        window.addEventListener('focus', handleUrlChange);
+
+        return () => {
+            window.removeEventListener('popstate', handleUrlChange);
+            window.removeEventListener('focus', handleUrlChange);
+        };
+    }, [isLookingUp]);
 
 
     const addProductToSale = (product: Product) => {

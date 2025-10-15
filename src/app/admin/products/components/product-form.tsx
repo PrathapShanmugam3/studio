@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, ScanLine } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useEffect, useState } from 'react';
@@ -43,7 +43,6 @@ interface ProductFormProps {
 
 export function ProductForm({ product }: ProductFormProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { toast } = useToast();
 
   const {
@@ -67,17 +66,39 @@ export function ProductForm({ product }: ProductFormProps) {
   });
   
   useEffect(() => {
-    const scannedBarcode = searchParams.get('barcode');
-    if (scannedBarcode) {
-      alert(`Scanned Barcode: ${scannedBarcode}`);
-      setValue('barcode', scannedBarcode, { shouldValidate: true });
-      
-      // Use URL API to safely remove the barcode parameter
-      const currentUrl = new URL(window.location.href);
-      currentUrl.searchParams.delete('barcode');
-      window.history.replaceState({}, '', currentUrl.toString());
-    }
-  }, [searchParams, setValue]);
+    const checkBarcode = () => {
+        const params = new URLSearchParams(window.location.search);
+        const scannedBarcode = params.get('barcode');
+        if (scannedBarcode) {
+            alert(`Scanned Barcode: ${scannedBarcode}`);
+            setValue('barcode', scannedBarcode, { shouldValidate: true });
+
+            // Clean up the URL
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.delete('barcode');
+            window.history.replaceState({}, '', currentUrl.toString());
+        }
+    };
+
+    // Check on initial load
+    checkBarcode();
+
+    // Check when URL changes (e.g., after redirect from scanner app)
+    const handleUrlChange = () => {
+        checkBarcode();
+    };
+
+    window.addEventListener('popstate', handleUrlChange);
+    // Also check on pushState/replaceState if needed, though scanner redirect might just be a direct navigation
+    // For this use case, listening to focus might be more robust
+    window.addEventListener('focus', handleUrlChange);
+
+
+    return () => {
+        window.removeEventListener('popstate', handleUrlChange);
+        window.removeEventListener('focus', handleUrlChange);
+    };
+  }, [setValue]);
 
 
   const openExternalScanner = () => {
