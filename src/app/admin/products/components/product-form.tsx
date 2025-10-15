@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ScanLine } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -44,6 +44,7 @@ interface ProductFormProps {
 export function ProductForm({ product }: ProductFormProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const {
     register,
@@ -67,29 +68,37 @@ export function ProductForm({ product }: ProductFormProps) {
   
   useEffect(() => {
     const checkBarcode = () => {
-        const params = new URLSearchParams(window.location.search);
-        const scannedBarcode = params.get('barcode');
-        if (scannedBarcode) {
-            alert(`Scanned Barcode: ${scannedBarcode}`);
-            setValue('barcode', scannedBarcode, { shouldValidate: true });
+      const params = new URLSearchParams(window.location.search);
+      const scannedBarcode = params.get('barcode');
+      if (scannedBarcode) {
+        alert(`Scanned Barcode: ${scannedBarcode}`);
+        setValue('barcode', scannedBarcode, { shouldValidate: true });
 
-            // Clean up the URL
-            const currentUrl = new URL(window.location.href);
-            currentUrl.searchParams.delete('barcode');
-            window.history.replaceState({}, '', currentUrl.toString());
+        // Clean up the URL
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.delete('barcode');
+        window.history.replaceState({}, '', currentUrl.toString());
+
+        // Stop polling
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
         }
+      }
     };
 
-    const handleFocus = () => {
-      checkBarcode();
-    };
-
-    window.addEventListener('focus', handleFocus);
-    // Also check on initial load in case the page is loaded with the parameter
+    // Check immediately on load
     checkBarcode();
+    
+    // Start polling if not already
+    if (!intervalRef.current) {
+        intervalRef.current = setInterval(checkBarcode, 500);
+    }
 
     return () => {
-      window.removeEventListener('focus', handleFocus);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
     };
   }, [setValue]);
 
@@ -265,5 +274,3 @@ export function ProductForm({ product }: ProductFormProps) {
     </>
   );
 }
-
-    

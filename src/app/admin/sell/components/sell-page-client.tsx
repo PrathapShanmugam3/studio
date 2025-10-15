@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { DollarSign, Loader2, PlusCircle, ScanLine, ShoppingCart, Trash2, X, Plus, Minus } from 'lucide-react';
 
@@ -30,6 +30,8 @@ export default function SellPageClient() {
     const [showConfirm, setShowConfirm] = useState(false);
     const [multipleProducts, setMultipleProducts] = useState<Product[]>([]);
     const { toast } = useToast();
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
 
     const handleBarcodeScanned = async (barcode: string) => {
         setIsLookingUp(true);
@@ -76,20 +78,28 @@ export default function SellPageClient() {
                 currentUrl.searchParams.delete('barcode');
                 window.history.replaceState({}, '', currentUrl.toString());
 
+                // Stop polling
+                if (intervalRef.current) {
+                    clearInterval(intervalRef.current);
+                    intervalRef.current = null;
+                }
+                
                 handleBarcodeScanned(scannedBarcode);
             }
         };
 
-        const handleFocus = () => {
-            checkBarcode();
-        };
-        
-        window.addEventListener('focus', handleFocus);
-        // Check on initial load as well
+        // Check immediately on load
         checkBarcode();
+        
+        // Start polling if not already
+        if (!intervalRef.current) {
+            intervalRef.current = setInterval(checkBarcode, 500);
+        }
 
         return () => {
-            window.removeEventListener('focus', handleFocus);
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+            }
         };
     }, [isLookingUp]);
 
@@ -105,7 +115,7 @@ export default function SellPageClient() {
 
             if (existingItemIndex > -1) {
                 const updatedItems = [...prevItems];
-                const newQuantity = updatedItems[existingItem-index].quantity + 1;
+                const newQuantity = updatedItems[existingItemIndex].quantity + 1;
                 if (newQuantity <= 100) {
                     updatedItems[existingItemIndex].quantity = newQuantity;
                     toast({
@@ -133,6 +143,15 @@ export default function SellPageClient() {
     const openExternalScanner = () => {
         const returnUrl = encodeURIComponent(window.location.href.split('?')[0]);
         window.location.href = `microbizscanner://scan?returnUrl=${returnUrl}`;
+         // After opening the scanner, start polling for the result
+        if (!intervalRef.current) {
+            intervalRef.current = setInterval(() => {
+                const params = new URLSearchParams(window.location.search);
+                if (params.has('barcode')) {
+                     // The useEffect hook will handle the rest
+                }
+            }, 500);
+        }
     };
 
 
@@ -314,5 +333,3 @@ export default function SellPageClient() {
         </>
     );
 }
-
-    
