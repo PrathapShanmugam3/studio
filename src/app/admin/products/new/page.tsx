@@ -1,5 +1,10 @@
+import { Suspense } from 'react';
 import { ProductForm } from '../components/product-form';
 
 export default function NewProductPage() {
-  return <ProductForm />;
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ProductForm />
+    </Suspense>
+  );
 }
