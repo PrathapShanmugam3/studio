@@ -73,13 +73,14 @@ export default function SellPageClient() {
     useEffect(() => {
         const scannedBarcode = searchParams.get('barcode');
         if (scannedBarcode && !isLookingUp) {
-            // Remove the barcode from URL to prevent re-triggering
-            const newUrl = window.location.pathname;
-            window.history.replaceState({}, '', newUrl);
+            // Use URL API to safely remove the barcode parameter
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.delete('barcode');
+            window.history.replaceState({}, '', currentUrl.toString());
 
             handleBarcodeScanned(scannedBarcode);
         }
-    }, [searchParams]);
+    }, [searchParams, isLookingUp]);
 
 
     const addProductToSale = (product: Product) => {
@@ -119,6 +120,7 @@ export default function SellPageClient() {
     }
 
     const openExternalScanner = () => {
+        // Create a clean URL without any existing search params for the return URL
         const returnUrl = encodeURIComponent(window.location.href.split('?')[0]);
         window.location.href = `microbizscanner://scan?returnUrl=${returnUrl}`;
     };

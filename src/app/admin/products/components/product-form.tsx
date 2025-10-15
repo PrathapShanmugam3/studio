@@ -70,14 +70,17 @@ export function ProductForm({ product }: ProductFormProps) {
     const scannedBarcode = searchParams.get('barcode');
     if (scannedBarcode) {
       setValue('barcode', scannedBarcode, { shouldValidate: true });
-      // Remove the barcode from the URL to prevent re-processing
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, '', newUrl);
+      
+      // Use URL API to safely remove the barcode parameter
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.delete('barcode');
+      window.history.replaceState({}, '', currentUrl.toString());
     }
   }, [searchParams, setValue]);
 
 
   const openExternalScanner = () => {
+      // Create a clean URL without any existing search params for the return URL
       const returnUrl = encodeURIComponent(window.location.href.split('?')[0]);
       window.location.href = `microbizscanner://scan?returnUrl=${returnUrl}`;
   };
