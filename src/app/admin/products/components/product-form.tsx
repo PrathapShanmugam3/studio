@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ScanLine } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -80,29 +80,21 @@ export function ProductForm({ product }: ProductFormProps) {
         }
     };
 
-    // Check on initial load
-    checkBarcode();
-
-    // Check when URL changes (e.g., after redirect from scanner app)
-    const handleUrlChange = () => {
-        checkBarcode();
+    const handleFocus = () => {
+      checkBarcode();
     };
 
-    window.addEventListener('popstate', handleUrlChange);
-    // Also check on pushState/replaceState if needed, though scanner redirect might just be a direct navigation
-    // For this use case, listening to focus might be more robust
-    window.addEventListener('focus', handleUrlChange);
-
+    window.addEventListener('focus', handleFocus);
+    // Also check on initial load in case the page is loaded with the parameter
+    checkBarcode();
 
     return () => {
-        window.removeEventListener('popstate', handleUrlChange);
-        window.removeEventListener('focus', handleUrlChange);
+      window.removeEventListener('focus', handleFocus);
     };
   }, [setValue]);
 
 
   const openExternalScanner = () => {
-      // Create a clean URL without any existing search params for the return URL
       const returnUrl = encodeURIComponent(window.location.href.split('?')[0]);
       window.location.href = `microbizscanner://scan?returnUrl=${returnUrl}`;
   };
@@ -273,3 +265,5 @@ export function ProductForm({ product }: ProductFormProps) {
     </>
   );
 }
+
+    

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { DollarSign, Loader2, PlusCircle, ScanLine, ShoppingCart, Trash2, X, Plus, Minus } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,8 +24,6 @@ import { ProductSelectionDialog } from './product-selection-dialog';
 
 
 export default function SellPageClient() {
-    const router = useRouter();
-
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
     const [isCheckingOut, setIsCheckingOut] = useState(false);
     const [isLookingUp, setIsLookingUp] = useState(false);
@@ -83,16 +80,16 @@ export default function SellPageClient() {
             }
         };
 
-        checkBarcode(); // Check on initial load
-
-        const handleUrlChange = () => checkBarcode();
+        const handleFocus = () => {
+            checkBarcode();
+        };
         
-        window.addEventListener('popstate', handleUrlChange);
-        window.addEventListener('focus', handleUrlChange);
+        window.addEventListener('focus', handleFocus);
+        // Check on initial load as well
+        checkBarcode();
 
         return () => {
-            window.removeEventListener('popstate', handleUrlChange);
-            window.removeEventListener('focus', handleUrlChange);
+            window.removeEventListener('focus', handleFocus);
         };
     }, [isLookingUp]);
 
@@ -108,7 +105,7 @@ export default function SellPageClient() {
 
             if (existingItemIndex > -1) {
                 const updatedItems = [...prevItems];
-                const newQuantity = updatedItems[existingItemIndex].quantity + 1;
+                const newQuantity = updatedItems[existingItem-index].quantity + 1;
                 if (newQuantity <= 100) {
                     updatedItems[existingItemIndex].quantity = newQuantity;
                     toast({
@@ -134,7 +131,6 @@ export default function SellPageClient() {
     }
 
     const openExternalScanner = () => {
-        // Create a clean URL without any existing search params for the return URL
         const returnUrl = encodeURIComponent(window.location.href.split('?')[0]);
         window.location.href = `microbizscanner://scan?returnUrl=${returnUrl}`;
     };
@@ -318,3 +314,5 @@ export default function SellPageClient() {
         </>
     );
 }
+
+    
