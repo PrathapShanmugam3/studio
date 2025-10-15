@@ -66,47 +66,45 @@ export function ProductForm({ product }: ProductFormProps) {
     },
   });
   
-  useEffect(() => {
-    const checkBarcode = () => {
-      const params = new URLSearchParams(window.location.search);
-      const scannedBarcode = params.get('barcode');
-      if (scannedBarcode) {
-        alert(`Scanned Barcode: ${scannedBarcode}`);
-        setValue('barcode', scannedBarcode, { shouldValidate: true });
+  const handleBarcodeCheck = () => {
+    const params = new URLSearchParams(window.location.search);
+    const scannedBarcode = params.get('barcode');
+    if (scannedBarcode) {
+      alert(`Scanned Barcode: ${scannedBarcode}`);
+      setValue('barcode', scannedBarcode, { shouldValidate: true });
 
-        // Clean up the URL
-        const currentUrl = new URL(window.location.href);
-        currentUrl.searchParams.delete('barcode');
-        window.history.replaceState({}, '', currentUrl.toString());
+      // Clean up the URL
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.delete('barcode');
+      window.history.replaceState({}, '', currentUrl.toString());
 
-        // Stop polling
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
+      // Stop polling
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
-    };
-
-    // Check immediately on load
-    checkBarcode();
-    
-    // Start polling if not already
-    if (!intervalRef.current) {
-        intervalRef.current = setInterval(checkBarcode, 500);
     }
+  };
 
+  const openExternalScanner = () => {
+      const returnUrl = encodeURIComponent(window.location.href.split('?')[0]);
+      window.location.href = `microbizscanner://scan?returnUrl=${returnUrl}`;
+      
+      // Start polling after trying to open the scanner
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      intervalRef.current = setInterval(handleBarcodeCheck, 500);
+  };
+  
+  // Cleanup on component unmount
+  useEffect(() => {
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [setValue]);
-
-
-  const openExternalScanner = () => {
-      const returnUrl = encodeURIComponent(window.location.href.split('?')[0]);
-      window.location.href = `microbizscanner://scan?returnUrl=${returnUrl}`;
-  };
+  }, []);
 
 
   const onSubmit = async (data: ProductFormData) => {

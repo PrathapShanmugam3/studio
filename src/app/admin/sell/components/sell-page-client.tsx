@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { DollarSign, Loader2, PlusCircle, ScanLine, ShoppingCart, Trash2, X, Plus, Minus } from 'lucide-react';
 
@@ -32,8 +32,7 @@ export default function SellPageClient() {
     const { toast } = useToast();
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-
-    const handleBarcodeScanned = async (barcode: string) => {
+    const handleBarcodeScanned = useCallback(async (barcode: string) => {
         setIsLookingUp(true);
 
         toast({
@@ -65,95 +64,69 @@ export default function SellPageClient() {
         } finally {
             setIsLookingUp(false);
         }
-    };
-
-    useEffect(() => {
-        const checkBarcode = () => {
-            const params = new URLSearchParams(window.location.search);
-            const scannedBarcode = params.get('barcode');
-            if (scannedBarcode && !isLookingUp) {
-                alert(`Scanned Barcode: ${scannedBarcode}`);
-                
-                const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.delete('barcode');
-                window.history.replaceState({}, '', currentUrl.toString());
-
-                // Stop polling
-                if (intervalRef.current) {
-                    clearInterval(intervalRef.current);
-                    intervalRef.current = null;
-                }
-                
-                handleBarcodeScanned(scannedBarcode);
-            }
-        };
-
-        // Check immediately on load
-        checkBarcode();
-        
-        // Start polling if not already
-        if (!intervalRef.current) {
-            intervalRef.current = setInterval(checkBarcode, 500);
-        }
-
-        return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-            }
-        };
-    }, [isLookingUp]);
+    }, [toast]);
 
 
-    const addProductToSale = (product: Product) => {
-        setScannedItems((prevItems) => {
-            const existingItemIndex = prevItems.findIndex(
-                (item) =>
-                item.id === product.id &&
-                item.barcode === product.barcode &&
-                item.expiryDate === product.expiryDate
-            );
+    const handleBarcodeCheck = useCallback(() => {
+      const params = new URLSearchParams(window.location.search);
+      const scannedBarcode = params.get('barcode');
+      if (scannedBarcode && !isLookingUp) {
+          alert(`Scanned Barcode: ${scannedBarcode}`);
+          
+          const currentUrl = new URL(window.location.href);
+          currentUrl.searchParams.delete('barcode');
+          window.history.replaceState({}, '', currentUrl.toString());
 
-            if (existingItemIndex > -1) {
-                const updatedItems = [...prevItems];
-                const newQuantity = updatedItems[existingItemIndex].quantity + 1;
-                if (newQuantity <= 100) {
-                    updatedItems[existingItemIndex].quantity = newQuantity;
-                    toast({
-                        title: "Quantity Updated",
-                        description: `${product.name} quantity increased to ${newQuantity}.`,
-                    });
-                } else {
-                     toast({
-                        title: "Quantity Limit",
-                        description: `You cannot add more than 100 units of ${product.name}.`,
-                        variant: 'destructive'
-                    });
-                }
-                return updatedItems;
-            } else {
-                toast({
-                    title: "Product Added",
-                    description: `${product.name} has been added to the sale.`,
-                });
-                return [...prevItems, { ...product, quantity: 1 }];
-            }
-        });
-    }
+          // Stop polling
+          if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+          }
+          
+          handleBarcodeScanned(scannedBarcode);
+      }
+    }, [isLookingUp, handleBarcodeScanned]);
+
 
     const openExternalScanner = () => {
         const returnUrl = encodeURIComponent(window.location.href.split('?')[0]);
         window.location.href = `microbizscanner://scan?returnUrl=${returnUrl}`;
          // After opening the scanner, start polling for the result
-        if (!intervalRef.current) {
-            intervalRef.current = setInterval(() => {
-                const params = new URLSearchParams(window.location.search);
-                if (params.has('barcode')) {
-                     // The useEffect hook will handle the rest
-                }
-            }, 500);
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
         }
+        intervalRef.current = setInterval(handleBarcodeCheck, 500);
     };
 
+    // Cleanup on component unmount
+    useEffect(() => {
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+            }
+        };
+    }, []);
+
+
+    const addProductToSale = (product: Product) => {
+        setScannedItems((prevItems) => {
+            const existingItem = prevItems.find((item) => item.id === product.id);
+
+            if (existingItem) {
+                return prevItems.map((item) =>
+                    item.id === product.id
+                        ? { ...item, quantity: item.quantity + 1 }
+                        : item
+                );
+            } else {
+                return [...prevItems, { ...product, quantity: 1 }];
+            }
+        });
+        toast({
+            title: "Product Added",
+            description: `${product.name} has been added to the sale.`,
+        });
+    }
 
     const handleProductSelect = (product: Product) => {
         addProductToSale(product);
